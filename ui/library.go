@@ -545,8 +545,31 @@ func (m *Library) statusLine() string {
 	if p.Paused {
 		state = "‖"
 	}
-	line := fmt.Sprintf("%s %s  %s / %s", state, name, clock(p.Position), clock(p.Duration))
-	return statusStyle.Width(m.width).MaxWidth(m.width).Render(line)
+	return playingLine(state+" "+name, p.Position, p.Duration, m.width)
+}
+
+// playingLine renders the status line for a track playing: what plays, then
+// the position, a bar and the length on the right. On a narrow screen, or
+// before the length is known, the bar gives way to "position / length".
+// The text is faint on each side of the bar, since the bar's colors end in
+// a reset.
+func playingLine(what string, pos, dur time.Duration, width int) string {
+	avail := max(width-2, 0) // padding
+	if dur <= 0 || avail < 50 {
+		line := fmt.Sprintf("%s  %s / %s", what, clock(pos), clock(dur))
+		return statusStyle.Width(width).MaxWidth(width).Render(line)
+	}
+	at, length := clock(pos), clock(dur)
+	if at == "" {
+		at = "0:00" // clock leaves zero blank
+	}
+	barW := min(30, avail/4)
+	nameW := avail - 2 - len(at) - 1 - barW - 1 - len(length)
+	what = ansi.Truncate(what, nameW, "…")
+	gap := strings.Repeat(" ", max(nameW-lipgloss.Width(what), 0)+2)
+	faint := lipgloss.NewStyle().Faint(true)
+	line := faint.Render(what+gap+at+" ") + bar(barW, float64(pos)/float64(dur)) + faint.Render(" "+length)
+	return lipgloss.NewStyle().Padding(0, 1).Width(width).MaxWidth(width).Render(line)
 }
 
 // Column indexes.

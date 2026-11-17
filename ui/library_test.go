@@ -10,6 +10,8 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/brennop/crates/events"
 	"github.com/brennop/crates/model"
@@ -294,5 +296,32 @@ func TestScanProgressSpins(t *testing.T) {
 	}
 	if _, cmd := m.Update(tick); cmd != nil || m.spinning {
 		t.Error("spinner kept ticking after the scan")
+	}
+}
+
+func TestPlayingLine(t *testing.T) {
+	plain := func(s string) string { return ansi.Strip(s) }
+	wide := plain(playingLine("▶ Artist – Title", 0, 4*time.Minute, 100))
+	if lipgloss.Width(wide) != 100 || !strings.HasPrefix(wide, " ▶ Artist – Title") ||
+		!strings.HasSuffix(wide, "0:00 "+strings.Repeat("░", 24)+" 4:00 ") {
+		t.Errorf("wide line = %q", wide)
+	}
+	half := plain(playingLine("▶ x", 2*time.Minute, 4*time.Minute, 100))
+	if !strings.Contains(half, "2:00 "+strings.Repeat("█", 12)+strings.Repeat("░", 12)+" 4:00") {
+		t.Errorf("half-way line = %q", half)
+	}
+	// Narrow, or the length not known yet: no bar.
+	for _, line := range []string{
+		plain(playingLine("▶ x", time.Minute, 4*time.Minute, 40)),
+		plain(playingLine("▶ x", time.Minute, 0, 100)),
+	} {
+		if strings.ContainsAny(line, "█░") || !strings.Contains(line, "1:00 / ") {
+			t.Errorf("line = %q, want no bar", line)
+		}
+	}
+	// A long name is cut, never the bar or the times.
+	long := plain(playingLine("▶ "+strings.Repeat("Name ", 40), time.Minute, 4*time.Minute, 80))
+	if lipgloss.Width(long) != 80 || !strings.Contains(long, "…") || !strings.HasSuffix(long, " 4:00 ") {
+		t.Errorf("long line = %q", long)
 	}
 }
