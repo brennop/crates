@@ -125,11 +125,7 @@ func id3v2(version byte, s model.TagSummary) []byte {
 		yearID = "TDRC"
 	}
 	var frames bytes.Buffer
-	add := func(id, val string) {
-		if val == "" {
-			return
-		}
-		data := textFrameData(version, val)
+	addRaw := func(id string, data []byte) {
 		frames.WriteString(id)
 		var size [4]byte
 		if version == 4 {
@@ -141,6 +137,11 @@ func id3v2(version byte, s model.TagSummary) []byte {
 		frames.Write([]byte{0, 0}) // flags
 		frames.Write(data)
 	}
+	add := func(id, val string) {
+		if val != "" {
+			addRaw(id, textFrameData(version, val))
+		}
+	}
 	add("TIT2", s.Title)
 	add("TPE1", s.Artist)
 	add("TALB", s.Album)
@@ -148,6 +149,13 @@ func id3v2(version byte, s model.TagSummary) []byte {
 	add("TRCK", itoa(s.TrackNumber))
 	add(yearID, itoa(s.Year))
 	add("TCON", s.Genre)
+	if s.Comment != "" {
+		addRaw("COMM", commentFrameData(version, s.Comment))
+	}
+	if s.BPM != 0 {
+		add("TBPM", strconv.FormatFloat(s.BPM, 'f', -1, 64))
+	}
+	add("TKEY", s.Key)
 
 	var b bytes.Buffer
 	b.WriteString("ID3")
@@ -174,6 +182,20 @@ func textFrameData(version byte, val string) []byte {
 	return out
 }
 
+// commentFrameData encodes a COMM body: encoding, language "eng", an empty
+// short description, then the text in the same encoding.
+func commentFrameData(version byte, val string) []byte {
+	data := textFrameData(version, val)
+	enc := data[0]
+	out := append([]byte{enc}, "eng"...)
+	if enc == 1 { // UTF-16 empty description is a double zero
+		out = append(out, 0, 0)
+	} else {
+		out = append(out, 0)
+	}
+	return append(out, data[1:]...)
+}
+
 func syncsafe(n int) [4]byte {
 	return [4]byte{byte(n >> 21 & 0x7F), byte(n >> 14 & 0x7F), byte(n >> 7 & 0x7F), byte(n & 0x7F)}
 }
@@ -194,7 +216,8 @@ func id3v1(s model.TagSummary) []byte {
 	put(33, 30, s.Artist)
 	put(63, 30, s.Album)
 	put(93, 4, itoa(s.Year))
-	// comment 97..124, then a zero byte and the track number (ID3v1.1)
+	put(97, 30, s.Comment)
+	// then a zero byte and the track number (ID3v1.1)
 	t[126] = byte(s.TrackNumber)
 	t[127] = 255
 	if g, ok := v1Genres[s.Genre]; ok {

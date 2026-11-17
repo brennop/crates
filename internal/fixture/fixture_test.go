@@ -147,3 +147,17 @@ func TestFFprobe(t *testing.T) {
 		})
 	}
 }
+
+func TestID3v2NewFrames(t *testing.T) {
+	for _, v := range []TagKind{ID3v23, ID3v24} {
+		b := MP3(Options{Tag: v, Summary: Full, Frames: 1})
+		s := b[6:10]
+		size := int(s[0])<<21 | int(s[1])<<14 | int(s[2])<<7 | int(s[3])
+		tag := b[10 : 10+size]
+		for _, id := range []string{"COMM", "TBPM", "TKEY"} {
+			if !bytes.Contains(tag, []byte(id)) {
+				t.Errorf("%v: no %s frame", v, id)
+			}
+		}
+	}
+}

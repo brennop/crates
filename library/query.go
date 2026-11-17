@@ -93,6 +93,8 @@ func comparator(field string) (func(a, b *model.Track) int, error) {
 		return func(a, b *model.Track) int { return cmp.Compare(a.Summary.TrackNumber, b.Summary.TrackNumber) }, nil
 	case model.FieldYear:
 		return func(a, b *model.Track) int { return cmp.Compare(a.Summary.Year, b.Summary.Year) }, nil
+	case model.FieldBPM:
+		return func(a, b *model.Track) int { return cmp.Compare(a.Summary.BPM, b.Summary.BPM) }, nil
 	}
 	if !model.IsSummaryField(field) {
 		return nil, fmt.Errorf("library: cannot sort by %q", field)

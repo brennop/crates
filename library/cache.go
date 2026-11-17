@@ -15,7 +15,7 @@ import (
 
 // schemaVersion is stored in schema_version. Bump it when the table changes:
 // the next start then deletes the cache and rebuilds it with a full scan.
-const schemaVersion = 1
+const schemaVersion = 2
 
 var createStatements = []string{
 	`CREATE TABLE schema_version (version INTEGER NOT NULL)`,
@@ -31,19 +31,23 @@ var createStatements = []string{
 		track_no     INTEGER NOT NULL,
 		year         INTEGER NOT NULL,
 		genre        TEXT    NOT NULL,
+		comment      TEXT    NOT NULL,
+		bpm          REAL    NOT NULL,
+		key          TEXT    NOT NULL,
 		duration_ns  INTEGER NOT NULL
 	)`,
 }
 
-const trackColumns = `id, path, size, mtime_ns, title, artist, album, album_artist, track_no, year, genre, duration_ns`
+const trackColumns = `id, path, size, mtime_ns, title, artist, album, album_artist, track_no, year, genre, comment, bpm, key, duration_ns`
 
 const upsertSQL = `INSERT INTO tracks (` + trackColumns + `)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(id) DO UPDATE SET
 		path = excluded.path, size = excluded.size, mtime_ns = excluded.mtime_ns,
 		title = excluded.title, artist = excluded.artist, album = excluded.album,
 		album_artist = excluded.album_artist, track_no = excluded.track_no,
-		year = excluded.year, genre = excluded.genre, duration_ns = excluded.duration_ns`
+		year = excluded.year, genre = excluded.genre, comment = excluded.comment,
+		bpm = excluded.bpm, key = excluded.key, duration_ns = excluded.duration_ns`
 
 // cache is the SQLite copy of the index. It is disposable: losing it costs a
 // full scan. Each write is one transaction, so a batch lands whole or not at
@@ -109,7 +113,8 @@ func (c *cache) readAll() ([]model.Track, error) {
 		)
 		if err := rows.Scan(&id, &t.Path, &t.Size, &mtime,
 			&t.Summary.Title, &t.Summary.Artist, &t.Summary.Album, &t.Summary.AlbumArtist,
-			&t.Summary.TrackNumber, &t.Summary.Year, &t.Summary.Genre, &dur); err != nil {
+			&t.Summary.TrackNumber, &t.Summary.Year, &t.Summary.Genre,
+			&t.Summary.Comment, &t.Summary.BPM, &t.Summary.Key, &dur); err != nil {
 			return nil, err
 		}
 		t.ID = model.TrackID(id)
@@ -180,7 +185,8 @@ func (c *cache) write(upserts []model.Track, removed []model.TrackID) error {
 		if _, err := tx.Exec(upsertSQL,
 			int64(t.ID), t.Path, t.Size, t.ModTime.UnixNano(),
 			t.Summary.Title, t.Summary.Artist, t.Summary.Album, t.Summary.AlbumArtist,
-			t.Summary.TrackNumber, t.Summary.Year, t.Summary.Genre, int64(t.Duration)); err != nil {
+			t.Summary.TrackNumber, t.Summary.Year, t.Summary.Genre,
+			t.Summary.Comment, t.Summary.BPM, t.Summary.Key, int64(t.Duration)); err != nil {
 			return err
 		}
 	}

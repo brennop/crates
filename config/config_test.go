@@ -107,7 +107,7 @@ func TestParseInvalid(t *testing.T) {
 		{"master inside inbox", "master_dir = \"~/Master\"\ninbox_dirs = [\"~\"]", "master_dir is inside inbox"},
 		{"overlapping inboxes", "master_dir = \"~/Master\"\ninbox_dirs = [\"~/dl\", \"~/dl/sub\"]", "overlap"},
 		{"bad delete mode", "master_dir = \"~/Master\"\ndelete_mode = \"shred\"", "delete_mode"},
-		{"unknown tag", "master_dir = \"~/Master\"\nrequired_tags = [\"title\", \"comment\"]", "unknown tag \"comment\""},
+		{"unknown tag", "master_dir = \"~/Master\"\nrequired_tags = [\"title\", \"bogus\"]", "unknown tag \"bogus\""},
 		{"unknown key", "master_dir = \"~/Master\"\nfilename_rule = \"x\"", "unknown keys: filename_rule"},
 		{"unknown music key", "master_dir = \"~/Master\"\n[music]\nautolauch = true", "unknown keys: music.autolauch"},
 		{"wrong type", "master_dir = 3", "master_dir"},

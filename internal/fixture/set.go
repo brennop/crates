@@ -35,6 +35,7 @@ const (
 var Full = model.TagSummary{
 	Title: "Song", Artist: "Artist", Album: "Album", AlbumArtist: "Album Artist",
 	TrackNumber: 3, Year: 2001, Genre: "Rock",
+	Comment: "Comment", BPM: 128, Key: "Am",
 }
 
 // WriteSet writes the standard fixtures under dir and returns them by name.
@@ -76,6 +77,7 @@ func GenerateLibrary(dir string, n int, seed int64) ([]File, error) {
 	rng := rand.New(rand.NewSource(seed))
 	kinds := []TagKind{ID3v23, ID3v24, ID3v24, ID3v1, Untagged}
 	genres := []string{"Rock", "Pop", "Jazz", "Electronic", "Blues"}
+	keys := []string{"Am", "C", "F#m", "8A", "11B"}
 	out := make([]File, 0, n)
 	for i := 0; i < n; i++ {
 		artist := fmt.Sprintf("Artist %03d", rng.Intn(n/10+1))
@@ -91,6 +93,9 @@ func GenerateLibrary(dir string, n int, seed int64) ([]File, error) {
 				TrackNumber: 1 + rng.Intn(20),
 				Year:        1960 + rng.Intn(65),
 				Genre:       genres[rng.Intn(len(genres))],
+				Comment:     fmt.Sprintf("Comment %05d", i),
+				BPM:         float64(70 + rng.Intn(110)),
+				Key:         keys[rng.Intn(len(keys))],
 			},
 		}
 		if o.Tag == Untagged {

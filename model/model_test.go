@@ -22,8 +22,21 @@ func TestSummaryFieldsKnown(t *testing.T) {
 			t.Errorf("%q not recognized", f)
 		}
 	}
-	if IsSummaryField("comment") {
-		t.Error("comment should not be a summary field")
+	if IsSummaryField("bogus") {
+		t.Error("bogus should not be a summary field")
+	}
+}
+
+func TestNewSummaryFields(t *testing.T) {
+	s := TagSummary{Comment: "c", BPM: 128.5, Key: "Am"}
+	for name, want := range map[string]string{FieldComment: "c", FieldBPM: "128.5", FieldKey: "Am"} {
+		if got, ok := s.Field(name); !ok || got != want {
+			t.Errorf("Field(%q) = %q, %v; want %q", name, got, ok, want)
+		}
+	}
+	got := TagSummary{}.Missing([]string{FieldComment, FieldBPM, FieldKey})
+	if want := []string{FieldComment, FieldBPM, FieldKey}; !slices.Equal(got, want) {
+		t.Errorf("Missing = %v, want %v", got, want)
 	}
 }
 

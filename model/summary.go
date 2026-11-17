@@ -2,8 +2,8 @@ package model
 
 import "strconv"
 
-// TagSummary is the handful of tag fields the track list shows. The full frame
-// set is read on demand through kid3-cli.
+// TagSummary is the handful of tag fields the track list shows, sorts and
+// filters on. The full frame set is read on demand through kid3-cli.
 type TagSummary struct {
 	Title       string
 	Artist      string
@@ -12,6 +12,9 @@ type TagSummary struct {
 	TrackNumber int // 0 = unset
 	Year        int // 0 = unset
 	Genre       string
+	Comment     string
+	BPM         float64 // 0 = unset; the TBPM frame, parsed as a number
+	Key         string  // the TKEY frame as text, e.g. "Am" or "8A"
 }
 
 // Summary field names, as used by required_tags in config.
@@ -23,12 +26,16 @@ const (
 	FieldTrackNumber = "track"
 	FieldYear        = "year"
 	FieldGenre       = "genre"
+	FieldComment     = "comment"
+	FieldBPM         = "bpm"
+	FieldKey         = "key"
 )
 
 // SummaryFields lists every TagSummary field name in display order.
 var SummaryFields = []string{
 	FieldTitle, FieldArtist, FieldAlbum, FieldAlbumArtist,
 	FieldTrackNumber, FieldYear, FieldGenre,
+	FieldComment, FieldBPM, FieldKey,
 }
 
 // IsSummaryField reports whether name is a TagSummary field name.
@@ -55,6 +62,15 @@ func (s TagSummary) Field(name string) (string, bool) {
 		return itoaNonZero(s.Year), true
 	case FieldGenre:
 		return s.Genre, true
+	case FieldComment:
+		return s.Comment, true
+	case FieldBPM:
+		if s.BPM == 0 {
+			return "", true
+		}
+		return strconv.FormatFloat(s.BPM, 'f', -1, 64), true
+	case FieldKey:
+		return s.Key, true
 	}
 	return "", false
 }
