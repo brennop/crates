@@ -243,6 +243,16 @@ func LaunchMusic(ctx context.Context, a *app.App) tea.Cmd {
 	return func() tea.Msg { return LaunchMusicResult{Err: a.LaunchMusic(ctx)} }
 }
 
+// PendingImportResult carries the count of the import waiting for an
+// answer, or 0 when none is.
+type PendingImportResult struct {
+	Count int
+}
+
+func PendingImport(a *app.App) tea.Cmd {
+	return func() tea.Msg { return PendingImportResult{Count: a.PendingImport()} }
+}
+
 type ConfirmImportResult struct{}
 
 func ConfirmImport(a *app.App) tea.Cmd {
@@ -281,8 +291,9 @@ func Capabilities(a *app.App) tea.Cmd {
 
 type CloseResult struct{ Err error }
 
-// Close stops the app. Cancel the ctx given to the other commands first, so
-// calls in flight end instead of holding Close up.
+// Close shuts the app down: reconciler, mpv, Music, kid3 and the cache.
+// Cancel the ctx given to the other commands first, so calls in flight end
+// instead of holding Close up. A second Close does nothing.
 func Close(a *app.App) tea.Cmd {
 	return func() tea.Msg { return CloseResult{Err: a.Close()} }
 }

@@ -19,6 +19,11 @@ type root struct {
 	// they had. A file is indexed once its size holds across two sweeps.
 	// Only the watch goroutine touches it.
 	pending map[string]int64
+
+	// empty holds zero-byte files in master already reported, by comparison
+	// key, so each is reported once while it stays empty. Only the watch
+	// goroutine touches it.
+	empty map[string]struct{}
 }
 
 // newRoot normalizes dir. The directory need not exist yet, so case
@@ -38,6 +43,7 @@ func newRoot(dir string, role model.Role, recursive bool) (*root, error) {
 		recursive:     recursive,
 		caseSensitive: cs,
 		pending:       make(map[string]int64),
+		empty:         make(map[string]struct{}),
 	}, nil
 }
 

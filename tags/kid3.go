@@ -48,7 +48,13 @@ type Kid3 struct {
 	bin string // "" when kid3-cli was not found
 	dir string // holds the private kid3 config
 	cfg string
+
+	ctx    context.Context // cancelled by Close; kills a call in flight
+	cancel context.CancelFunc
 }
+
+// ErrClosed: Full or Write after Close.
+var ErrClosed = errors.New("tags: closed")
 
 // New finds kid3-cli on PATH. When it is missing, New still succeeds:
 // Summary works, Full and Write return model.ErrKid3Missing, and Available
@@ -56,7 +62,8 @@ type Kid3 struct {
 func New() (*Kid3, error) {
 	bin, err := exec.LookPath("kid3-cli")
 	if err != nil {
-		return &Kid3{}, nil
+		ctx, cancel := context.WithCancel(context.Background())
+		return &Kid3{ctx: ctx, cancel: cancel}, nil
 	}
 	return newKid3(bin)
 }
@@ -71,14 +78,16 @@ func newKid3(bin string) (*Kid3, error) {
 		os.RemoveAll(dir)
 		return nil, err
 	}
-	return &Kid3{bin: bin, dir: dir, cfg: cfg}, nil
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Kid3{bin: bin, dir: dir, cfg: cfg, ctx: ctx, cancel: cancel}, nil
 }
 
 // Available reports whether kid3-cli was found, for app.Capabilities.
 func (k *Kid3) Available() bool { return k.bin != "" }
 
-// Close removes the private kid3 config.
+// Close kills a kid3-cli call in flight and removes the private kid3 config.
 func (k *Kid3) Close() error {
+	k.cancel()
 	if k.dir == "" {
 		return nil
 	}
@@ -188,14 +197,22 @@ func (k *Kid3) run(ctx context.Context, timeout time.Duration, cmds []command, p
 		args = append(args, abs)
 	}
 
+	if k.ctx.Err() != nil {
+		return nil, ErrClosed
+	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	stop := context.AfterFunc(k.ctx, cancel)
+	defer stop()
 	cmd := exec.CommandContext(ctx, k.bin, args...)
 	cmd.Env = append(os.Environ(), "KID3_CONFIG_FILE="+k.cfg)
 	cmd.WaitDelay = time.Second
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	runErr := cmd.Run()
+	if k.ctx.Err() != nil {
+		return nil, ErrClosed
+	}
 	if ctx.Err() != nil {
 		return nil, fmt.Errorf("kid3-cli: %w", ctx.Err())
 	}

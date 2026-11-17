@@ -18,11 +18,12 @@ import (
 )
 
 // Config holds the pieces App is built from. The player is built by
-// NewPlayer because App is its event sink.
+// NewPlayer because App is its event sink. App owns the pieces from New on:
+// Close closes them all, and so does a failed New (unless a piece is nil).
 type Config struct {
 	Library   *library.Library
 	Tags      tags.Store
-	Music     music.Client
+	Music     music.Service
 	NewPlayer func(events.Sink) (player.Player, error)
 	Bus       events.Sink // the UI's bus
 	Settings  config.Config
@@ -44,7 +45,8 @@ const reloadWindow = 10 * time.Second
 type App struct {
 	lib      *library.Library
 	tags     tags.Store
-	music    music.Client
+	music    music.Client  // wrapped to track Music's state
+	musicSvc music.Service // the unwrapped one, to close
 	player   player.Player
 	bus      events.Sink
 	required []string
@@ -86,6 +88,8 @@ type App struct {
 	pending    int  // tracks in the ImportPending awaiting an answer; 0 = none
 	confirmed  bool // the user confirmed an import; cleared when one completes
 	dead       []events.DeadEntry
+
+	closeOnce sync.Once
 
 	inbox  *events.Bus // player events, handled by run
 	ctx    context.Context
@@ -129,13 +133,13 @@ func New(cfg Config) (*App, error) {
 	}
 	mode := fsops.Mode(cfg.Settings.DeleteMode)
 	if mode != fsops.ModeTrash && mode != fsops.ModeRemove {
-		return nil, fmt.Errorf("app: unknown delete mode %q", cfg.Settings.DeleteMode)
+		return nil, errors.Join(fmt.Errorf("app: unknown delete mode %q", cfg.Settings.DeleteMode), closePieces(cfg))
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	a := &App{
 		lib:      cfg.Library,
 		tags:     cfg.Tags,
-		music:    cfg.Music,
+		musicSvc: cfg.Music,
 		bus:      cfg.Bus,
 		required: append([]string(nil), cfg.Settings.RequiredTags...),
 		mode:     mode,
@@ -154,7 +158,7 @@ func New(cfg Config) (*App, error) {
 	p, err := cfg.NewPlayer(a)
 	if err != nil {
 		cancel()
-		return nil, err
+		return nil, errors.Join(err, closePieces(cfg))
 	}
 	if !a.musicOn {
 		a.state = model.MusicDisabled
@@ -165,9 +169,24 @@ func New(cfg Config) (*App, error) {
 	return a, nil
 }
 
-// Close stops the reconciler and the handling of player events, and closes
-// the player. A Music call in flight is cancelled.
+// closePieces closes what a failed New was given.
+func closePieces(cfg Config) error {
+	return errors.Join(cfg.Music.Close(), cfg.Tags.Close(), cfg.Library.Close())
+}
+
+// Close is the one shutdown path. In order: it stops handling player events
+// and the reconciler; closes the player (mpv quits, its socket dir and
+// pidfile are removed); closes Music (an osascript in flight is killed);
+// closes tags (a kid3-cli call in flight is killed, the private kid3 config
+// removed); then closes the library, which stops its sweeps and flushes
+// and closes the cache. Calls into App after Close fail. A second Close
+// does nothing and returns nil.
 func (a *App) Close() error {
+	var first bool
+	a.closeOnce.Do(func() { first = true })
+	if !first {
+		return nil
+	}
 	a.cancel()
 	<-a.done
 	a.recMu.Lock()
@@ -176,7 +195,20 @@ func (a *App) Close() error {
 	if started {
 		<-a.recDone
 	}
-	return a.player.Close()
+	var errs []error
+	if err := a.player.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("close player: %w", err))
+	}
+	if err := a.musicSvc.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("close music: %w", err))
+	}
+	if err := a.tags.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("close tags: %w", err))
+	}
+	if err := a.lib.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("close library: %w", err))
+	}
+	return errors.Join(errs...)
 }
 
 // Publish is the player's sink. It never blocks: events queue up for run,

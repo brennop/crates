@@ -17,6 +17,9 @@ type Store interface {
 	// Available reports whether kid3-cli was found. Without it Full and
 	// Write return model.ErrKid3Missing.
 	Available() bool
+	// Close kills a kid3-cli call in flight and removes the private kid3
+	// config. Full and Write fail afterwards; Summary still works.
+	Close() error
 }
 
 var (

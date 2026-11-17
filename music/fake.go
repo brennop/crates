@@ -31,6 +31,7 @@ type Fake struct {
 	fail      map[string][]error
 	calls     []FakeCall
 	now       func() time.Time
+	closed    bool
 }
 
 // FakeCall records one Client call.
@@ -57,7 +58,21 @@ const (
 // setting is on.
 const MediaDir = "/Music/Media.localized/Music"
 
-var _ Client = (*Fake)(nil)
+var _ Service = (*Fake)(nil)
+
+// Close marks the fake closed; see Closed. Calls still work, so a test can
+// inspect the fake afterwards.
+func (f *Fake) Close() error {
+	f.set(func() { f.closed = true })
+	return nil
+}
+
+// Closed reports whether Close ran.
+func (f *Fake) Closed() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.closed
+}
 
 // NewFake returns a running Music with an empty library.
 func NewFake() *Fake {

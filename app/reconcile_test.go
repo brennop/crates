@@ -424,3 +424,24 @@ func waitUntil(t *testing.T, cond func() bool) {
 		}
 	}
 }
+
+func TestReconcileSkipsEmptyMasterFile(t *testing.T) {
+	e := newEnv(t)
+	empty := filepath.Join(e.master, "claimed.mp3")
+	if err := os.WriteFile(empty, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.lib.SweepMaster(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	e.pass()
+	if adds := e.music.CallsOf(music.OpAdd); len(adds) != 0 {
+		t.Errorf("adds = %v, want none", adds)
+	}
+	if _, ok := e.lib.FindMaster("claimed.mp3"); ok {
+		t.Error("the empty file is indexed")
+	}
+	if !exists(empty) {
+		t.Error("the empty file was removed")
+	}
+}

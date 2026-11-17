@@ -16,8 +16,8 @@ import (
 //	Playlists: Playlists, Memberships, AddToPlaylist, RemoveFromPlaylist
 //	Playback:  Play, Enqueue, Next, Previous, RemoveFromQueue, ClearQueue,
 //	           Queue, TogglePause, Seek, SetVolume
-//	Music:     MusicStatus, LaunchMusic, ConfirmImport, CancelImport,
-//	           DeadEntries
+//	Music:     MusicStatus, LaunchMusic, PendingImport, ConfirmImport,
+//	           CancelImport, DeadEntries
 //	Other:     Capabilities, Close
 //
 // ui wraps each one in a tea.Cmd. docs/api.md describes them.

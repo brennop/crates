@@ -138,7 +138,7 @@ func TestPromoteRejectsMasterTrack(t *testing.T) {
 	e := newEnv(t)
 	m := e.file(e.master, "m.mp3", tagged)
 	sum := e.app.Promote(e.ctx, []model.TrackID{m.ID})
-	if len(sum.Failures) != 1 || !errors.Is(sum.Failures[0].Err, ErrNotInbox) {
+	if len(sum.Failures) != 1 || !errors.As(sum.Failures[0].Err, new(model.ErrNotInbox)) {
 		t.Fatalf("summary = %+v", sum)
 	}
 }

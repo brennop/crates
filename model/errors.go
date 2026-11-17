@@ -104,6 +104,24 @@ type ErrNotInMusic struct {
 
 func (e ErrNotInMusic) Error() string { return fmt.Sprintf("track %d is not in Music", e.ID) }
 
+// ErrNotInbox: promote or overwrite got a track that is not in an inbox.
+type ErrNotInbox struct {
+	ID TrackID
+}
+
+func (e ErrNotInbox) Error() string { return fmt.Sprintf("track %d is not in an inbox", e.ID) }
+
+// ErrEmptyMasterFile: a zero-byte .mp3 sits in master, most likely the
+// placeholder a crashed move left behind. It is not indexed and never
+// deleted automatically; the user removes it or fills it.
+type ErrEmptyMasterFile struct {
+	Path string
+}
+
+func (e ErrEmptyMasterFile) Error() string {
+	return fmt.Sprintf("%s is empty (left by an interrupted move?): not indexed; delete it if it is not yours", e.Path)
+}
+
 // ErrKid3Missing: kid3-cli was not found, so full tag reads and writes are off.
 type ErrKid3Missing struct{}
 

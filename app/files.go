@@ -13,9 +13,6 @@ import (
 	"github.com/brennop/crates/pathnorm"
 )
 
-// ErrNotInbox: promote or overwrite got a track that is already in master.
-var ErrNotInbox = errors.New("app: track is not in an inbox")
-
 // Collision is an inbox track whose name is taken in master.
 type Collision struct {
 	Inbox    model.TrackID
@@ -93,7 +90,7 @@ func (a *App) promotable(id model.TrackID) (model.Track, error) {
 		return t, err
 	}
 	if t.Role != model.Inbox {
-		return t, fmt.Errorf("%w: %d", ErrNotInbox, id)
+		return t, model.ErrNotInbox{ID: id}
 	}
 	if missing := t.Summary.Missing(a.required); len(missing) > 0 {
 		return t, model.ErrMissingTags{Missing: missing}

@@ -49,13 +49,13 @@ type MPV struct {
 	interval     time.Duration
 	restartDelay time.Duration
 
-	mu     sync.Mutex
-	closed bool
-	gen    int // bumps per connection; events from an old one are dropped
-	c      *conn
-	p      *proc
-	st     state
-	cur    entry // the file whose end-file counts; zero while a load is in flight
+	mu      sync.Mutex
+	closed  bool
+	gen     int // bumps per connection; events from an old one are dropped
+	c       *conn
+	p       *proc
+	st      state
+	cur     entry // the file whose end-file counts; zero while a load is in flight
 	lastPID int
 
 	tmu   sync.Mutex

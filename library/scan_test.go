@@ -232,3 +232,53 @@ func TestInboxTickIndexesSettledFile(t *testing.T) {
 		return false
 	})
 }
+
+func TestEmptyMasterFileIsReportedNotIndexed(t *testing.T) {
+	e := newEnv(t)
+	put(t, filepath.Join(e.master, "a.mp3"), 10)
+	empty := filepath.Join(e.master, "claimed.mp3")
+	put(t, empty, 0)
+	put(t, filepath.Join(e.inbox, "in", "zero.mp3"), 0) // inboxes are not checked
+	l := e.open()
+
+	isEmptyErr := func(ev events.Event) bool {
+		er, ok := ev.(events.Error)
+		var x model.ErrEmptyMasterFile
+		return ok && errors.As(er.Err, &x) && x.Path == empty
+	}
+	scan(t, l, l.masterRoot())
+	scan(t, l, l.masterRoot())
+
+	got := byTitle(all(l))
+	if _, ok := got["claimed.mp3"]; ok || len(got) != 1 {
+		t.Fatalf("indexed %v, want a.mp3 only", got)
+	}
+	if n := e.sink.count(isEmptyErr); n != 1 {
+		t.Errorf("reports = %d after two sweeps, want 1", n)
+	}
+	if _, err := os.Stat(empty); err != nil {
+		t.Errorf("the empty file is gone: %v", err)
+	}
+
+	// A file that empties out leaves the index and is reported too.
+	a := got["a.mp3"]
+	put(t, a.Path, 0)
+	scan(t, l, l.masterRoot())
+	if len(l.Get(a.ID)) != 0 {
+		t.Error("a.mp3 is still indexed after it was emptied")
+	}
+	if n := e.sink.count(func(ev events.Event) bool {
+		er, ok := ev.(events.Error)
+		var x model.ErrEmptyMasterFile
+		return ok && errors.As(er.Err, &x) && x.Path == a.Path
+	}); n != 1 {
+		t.Errorf("emptied a.mp3 reported %d times, want 1", n)
+	}
+
+	// Filled again, the placeholder is indexed like any file.
+	put(t, empty, 10)
+	scan(t, l, l.masterRoot())
+	if _, ok := byTitle(all(l))["claimed.mp3"]; !ok {
+		t.Error("the filled file was not indexed")
+	}
+}

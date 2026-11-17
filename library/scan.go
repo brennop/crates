@@ -109,6 +109,32 @@ func statFile(r *root, path string) (file, bool, error) {
 	}, true, nil
 }
 
+// dropEmpty removes zero-byte files from a master listing. Such a file is
+// the placeholder a crashed move leaves under the real name (see
+// fsops.Move). The library cannot tell it from a user's file, so it never
+// deletes it: it leaves it out of the index, so it never reaches Music, and
+// reports it once. A tracked file that fills up again is forgotten here and
+// indexed as usual.
+func (l *Library) dropEmpty(r *root, files []file) []file {
+	if r.role != model.Master {
+		return files
+	}
+	kept := files[:0]
+	now := make(map[string]struct{})
+	for _, f := range files {
+		if f.size != 0 {
+			kept = append(kept, f)
+			continue
+		}
+		now[f.key] = struct{}{}
+		if _, done := r.empty[f.key]; !done {
+			l.report("scan master", model.ErrEmptyMasterFile{Path: f.path})
+		}
+	}
+	r.empty = now
+	return kept
+}
+
 // settled reports whether an inbox file has kept its size since the previous
 // sweep. The first sighting only records the size. A settled file is
 // forgotten here, and the caller indexes it.
@@ -137,6 +163,7 @@ func (l *Library) scanRoot(ctx context.Context, r *root) error {
 		return err
 	}
 
+	files = l.dropEmpty(r, files)
 	seen := make(map[string]struct{}, len(files))
 	var moved []model.Track // known tracks whose path changed; no read needed
 	var jobs []file         // new or changed files that need a summary read
@@ -205,7 +232,9 @@ func (l *Library) scanRoot(ctx context.Context, r *root) error {
 		l.fsMu.Lock()
 		var gone []model.TrackID
 		for _, t := range l.idx.under(r) {
-			if _, ok := seen[pathnorm.Key(t.Path, r.caseSensitive)]; !ok && vanished(t.Path) {
+			k := pathnorm.Key(t.Path, r.caseSensitive)
+			_, isEmpty := r.empty[k]
+			if _, ok := seen[k]; !ok && (isEmpty || vanished(t.Path)) {
 				gone = append(gone, t.ID)
 			}
 		}

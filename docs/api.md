@@ -9,14 +9,14 @@ Bubble Tea is `charm.land/bubbletea/v2` (pinned at v2.0.2, the last v2 release t
 - **Calling.** `ui.Promote(ctx, a, ids)` returns a `tea.Cmd`. Bubble Tea runs it off the `Update` loop; it returns `ui.PromoteResult`. Return the command from `Update` and handle the result in a later `Update`.
 - **Context.** Functions take a `ctx` wherever the `app` method does. Give them one context that you cancel when quitting, so calls into kid3-cli, mpv or Music stop instead of holding up `Close`.
 - **Results.** Each result echoes the arguments you need to match it to the request (`ID`, `IDs`, `PlaylistID`, `Index`, `Gen`) and carries `Err` when the method can fail. Batch operations (`Promote`, `Delete`) return a summary, not an error.
-- **Errors.** Typed errors live in `model` and are values: match them with `errors.As`. Sentinels in `app` (`ErrUnknownTrack`, `ErrNotInbox`, `ErrUnknownPlaylist`, `ErrQueueIndex`) and `music` (`ErrDisabled`, `ErrClosed`) match with `errors.Is`. `context.Canceled` can come back from any command that takes a `ctx`.
+- **Errors.** Typed errors live in `model` and are values: match them with `errors.As`. Sentinels in `app` (`ErrUnknownTrack`, `ErrUnknownPlaylist`, `ErrQueueIndex`) and `music` (`ErrDisabled`, `ErrClosed`) match with `errors.Is`. `context.Canceled` can come back from any command that takes a `ctx`.
 
   ```go
   var c model.ErrCollision
   if errors.As(err, &c) { /* c.Name, c.Existing */ }
   ```
 
-- **Background failures.** Work with no caller (reconciler adds, Music refresh after a tag write, the master sweep after a missed collision, auto-advance) reports through `events.Error{Op, Err}` on the bus.
+- **Background failures.** Work with no caller (reconciler adds, Music refresh after a tag write, the master sweep after a missed collision, auto-advance) reports through `events.Error{Op, Err}` on the bus. A sweep reports a zero-byte `.mp3` in master once as `ErrEmptyMasterFile{Path}`: it is likely a placeholder left by an interrupted move, it is not indexed (so it never reaches Music), and it is never deleted. Promote onto its name is still a collision, with `Existing` 0.
 
 ## Events
 
@@ -79,7 +79,7 @@ Change events come before state events when both are waiting.
 
 | Command | Result | Errors | Events after |
 | --- | --- | --- | --- |
-| `Promote(ctx, a, ids)` | `PromoteResult{Summary}` | in `Summary.Failures`: `ErrMissingTags`, `ErrNotInbox`, `ErrUnknownTrack`, file errors | `TracksChanged` (moved tracks keep their ID); reconciler adds them to Music |
+| `Promote(ctx, a, ids)` | `PromoteResult{Summary}` | in `Summary.Failures`: `ErrMissingTags`, `ErrNotInbox` (a master track; `.ID`), `ErrUnknownTrack`, file errors | `TracksChanged` (moved tracks keep their ID); reconciler adds them to Music |
 | `Overwrite(ctx, a, inboxID)` | `OverwriteResult{Inbox, Err}` | `ErrBackupKept` (done, old file kept), `ErrMissingTags`, `ErrNotInbox`, `ErrUnknownTrack`, file errors | `TracksChanged`, `TrackRemoved` (the inbox track); `Error` if Music's refresh fails |
 | `Delete(ctx, a, ids)` | `DeleteResult{Summary}` | in `Summary.Failures`: `ErrPlaylistsLost`, Music errors, file errors, `ErrUnknownTrack` | `TrackRemoved`; `PlaylistsChanged` for tracks that were in Music |
 
@@ -128,6 +128,7 @@ Both read the last snapshot; nothing is shown until the first `Refresh` / `Focus
 | --- | --- | --- | --- |
 | `MusicStatus(a)` | `MusicStatusResult{State}` | — | — |
 | `LaunchMusic(ctx, a)` | `LaunchMusicResult{Err}` | `music.ErrDisabled`, `ErrAutomationDenied`, `ErrMusicUnavailable` | `MusicStatus`, `PlaylistsChanged`, reconciler events |
+| `PendingImport(a)` | `PendingImportResult{Count}` | — | — |
 | `ConfirmImport(a)` | `ConfirmImportResult{}` | — | `TracksChanged` as tracks gain Music IDs; `Error` per failed add |
 | `CancelImport(a)` | `CancelImportResult{}` | — | — |
 | `DeadEntries(a)` | `DeadEntriesResult{Entries}` | — | — |
@@ -139,7 +140,9 @@ Music errors anywhere above are `ErrMusicUnavailable` (not running, autolaunch o
 | Command | Result | Errors | Events after |
 | --- | --- | --- | --- |
 | `Capabilities(a)` | `CapabilitiesResult{Capabilities}` | — | — |
-| `Close(a)` | `CloseResult{Err}` | player close errors | none; stop the pump |
+| `Close(a)` | `CloseResult{Err}` | errors from closing the player, Music, kid3 or the cache, joined | none; stop the pump |
+
+`Close` is the one shutdown path: it stops the reconciler, quits mpv (removing its socket dir and pidfile), kills an osascript or kid3-cli call in flight, removes kid3's private config, then flushes and closes the cache. A second `Close` does nothing. `cmd/crates` closes the app after the program returns, so the model only needs `Close(a)` if it wants the result before quitting.
 
 `Capabilities` is `{Kid3, TrashMethod, DeleteMode, MusicEnabled}`, fixed for the run. Hide tag editing without `Kid3`. `TrashMethod` is `command` (`/usr/bin/trash`) or `finder` (Finder through osascript, which needs the Automation permission for Finder). `DeleteMode` is `trash` or `remove`. Without `MusicEnabled`, hide playlists and Music status: `MusicStatus` stays `disabled`.
 
@@ -162,6 +165,8 @@ When a reconcile pass would add more than 100 tracks to Music, it adds none and 
 
 - **Confirm:** `ConfirmImport(a)`. The pass runs and adds them; `TracksChanged` follows as tracks gain Music IDs, `Error{Op: "add to Music"}` for any that fail.
 - **Cancel:** `CancelImport(a)`. Nothing is added. The next pass on a fresh snapshot (focus, `Refresh`, `LaunchMusic`) asks again.
+
+- **Redraw:** `PendingImport(a)` returns `PendingImportResult{Count}`, the count still waiting, or 0 when none is. Use it to bring the prompt back (after a resize, a view switch, a restart of the model) without waiting for another `ImportPending`.
 
 Either answer does nothing when no import is pending, so a stale prompt is harmless.
 
@@ -213,4 +218,4 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 ### Shutdown
 
-Cancel the context given to the commands, stop re-arming `WaitForEvent`, then run `Close(a)` and quit on `CloseResult`.
+`cmd/crates` builds the model with `newUI(ctx, a, bus)` (in `cmd/crates/ui.go`). To quit, return `tea.Quit`. When the program returns, `cmd` cancels `ctx`, which ends calls in flight, and then closes the app. To show the close result before exiting, stop re-arming `WaitForEvent`, run `Close(a)`, and quit on `CloseResult`. The second `Close` that `cmd` makes does nothing.

@@ -3,6 +3,7 @@ package tags
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -356,5 +357,40 @@ func TestFullIndexes(t *testing.T) {
 	t.Setenv("STUB_OUT", `{"result":{"taggedFile":{}}}`)
 	if _, err := k.Full(context.Background(), mp3); err == nil {
 		t.Error("empty taggedFile accepted")
+	}
+}
+
+func TestCloseKillsCallInFlight(t *testing.T) {
+	k, _ := stub(t)
+	mp3 := filepath.Join(t.TempDir(), "a.mp3")
+	os.WriteFile(mp3, nil, 0o644)
+	t.Setenv("STUB_SLEEP", "20")
+	t.Setenv("STUB_OUT", "")
+
+	errc := make(chan error, 1)
+	go func() {
+		errc <- k.Write(context.Background(), []string{mp3}, []model.FrameChange{{Name: "Title", Value: "x"}})
+	}()
+	time.Sleep(200 * time.Millisecond) // let kid3-cli start
+	start := time.Now()
+	if err := k.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-errc:
+		if !errors.Is(err, ErrClosed) {
+			t.Errorf("write in flight: err = %v, want ErrClosed", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the call in flight outlived Close")
+	}
+	if d := time.Since(start); d > 3*time.Second {
+		t.Errorf("took %v", d)
+	}
+	if _, err := os.Stat(k.dir); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("private config dir remains: %v", err)
+	}
+	if _, err := k.Full(context.Background(), mp3); !errors.Is(err, ErrClosed) {
+		t.Errorf("full after close: err = %v, want ErrClosed", err)
 	}
 }

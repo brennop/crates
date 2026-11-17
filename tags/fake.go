@@ -22,6 +22,7 @@ type Fake struct {
 	missing   bool // behave as if kid3-cli were not installed
 	writes    []FakeWrite
 	fullCalls int
+	closed    bool
 }
 
 type fakeFile struct {
@@ -54,6 +55,21 @@ var FakeFieldFrames = map[string]string{
 	"Album Artist": model.FieldAlbumArtist, "Track Number": model.FieldTrackNumber,
 	"Date": model.FieldYear, "Genre": model.FieldGenre, "Comment": model.FieldComment,
 	"BPM": model.FieldBPM, "Initial Key": model.FieldKey,
+}
+
+// Close marks the fake closed; see Closed.
+func (f *Fake) Close() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.closed = true
+	return nil
+}
+
+// Closed reports whether Close ran.
+func (f *Fake) Closed() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.closed
 }
 
 // NewFake returns an empty fake.

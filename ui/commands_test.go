@@ -216,7 +216,8 @@ func TestFileCommands(t *testing.T) {
 		t.Errorf("overwrite = %+v", o)
 	}
 	o = run[OverwriteResult](t, Overwrite(e.ctx, e.app, fresh.ID)) // now in master
-	if !errors.Is(o.Err, app.ErrNotInbox) {
+	var ni model.ErrNotInbox
+	if !errors.As(o.Err, &ni) || ni.ID != fresh.ID {
 		t.Errorf("overwrite of a master track: err = %v, want ErrNotInbox", o.Err)
 	}
 
@@ -338,6 +339,9 @@ func TestMusicCommands(t *testing.T) {
 	}
 	if s := run[MusicStatusResult](t, MusicStatus(e.app)); s.State != model.MusicAvailable {
 		t.Errorf("status after launch = %v", s.State)
+	}
+	if p := run[PendingImportResult](t, PendingImport(e.app)); p.Count != 0 {
+		t.Errorf("pending import with none waiting = %d", p.Count)
 	}
 	run[ConfirmImportResult](t, ConfirmImport(e.app))
 	run[CancelImportResult](t, CancelImport(e.app))
