@@ -143,7 +143,7 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.SetWidth(msg.Width)
 		m.table.SetHeight(max(msg.Height-2, 3)) // title line and status line
 		m.setCursor(m.cursor)                   // cells are padded to the column widths
-		m.sizeEdit()
+		m.sizePrompts()
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -241,10 +241,7 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.PasteMsg:
-		if m.edit != nil {
-			return m, m.editUpdate(msg)
-		}
-		return m, nil
+		return m, m.promptUpdate(msg)
 
 	case libraryLoaded:
 		if msg.gen != m.gen {
@@ -309,10 +306,8 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case events.Event:
 		return m, tea.Batch(m.handleEvent(msg), WaitForEvent(m.bus))
 	}
-	if m.edit != nil {
-		return m, m.editUpdate(msg) // the input's own messages, such as a ctrl+v paste
-	}
-	return m, nil
+	// The prompt's own messages, such as a ctrl+v paste.
+	return m, m.promptUpdate(msg)
 }
 
 func (m *Library) handleEvent(e events.Event) tea.Cmd {
@@ -489,10 +484,10 @@ func (m *Library) View() tea.View {
 
 func (m *Library) statusLine() string {
 	if m.search != nil {
-		return promptLine("/"+m.search.query+"█", m.width)
+		return promptView(m.search.input, m.width)
 	}
 	if m.edit != nil {
-		return lipgloss.NewStyle().Padding(0, 1).Width(m.width).MaxWidth(m.width).Render(m.edit.input.View())
+		return promptView(m.edit.input, m.width)
 	}
 	if m.status != "" {
 		return errorStyle.Width(m.width).MaxWidth(m.width).Render(m.status)
@@ -514,15 +509,6 @@ func (m *Library) statusLine() string {
 	}
 	line := fmt.Sprintf("%s %s  %s / %s", state, name, clock(p.Position), clock(p.Duration))
 	return statusStyle.Width(m.width).MaxWidth(m.width).Render(line)
-}
-
-// promptLine renders a status-line prompt. A line too long for the screen
-// loses its head, so the cursor at the end stays in view.
-func promptLine(s string, width int) string {
-	if w := width - 2; w > 0 && ansi.StringWidth(s) > w {
-		s = "…" + ansi.TruncateLeft(s, ansi.StringWidth(s)-w+1, "")
-	}
-	return lipgloss.NewStyle().Padding(0, 1).Width(width).MaxWidth(width).Render(s)
 }
 
 // Column indexes.

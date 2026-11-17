@@ -3,7 +3,6 @@ package ui
 import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/brennop/crates/model"
 )
@@ -25,8 +24,7 @@ var (
 // editPrompt is an open tag edit in the status line. It holds the track's
 // ID, not its row, so a reload while typing cannot move the edit to another
 // track. orig is the value it opened with; enter on an unchanged value
-// writes nothing. The line itself is a textinput, which brings the
-// readline keys (ctrl+a/e/b/f/d/w/k/u, alt+b/f/d).
+// writes nothing.
 type editPrompt struct {
 	id    model.TrackID
 	field editField
@@ -54,30 +52,8 @@ func (m *Library) openEdit(f editField) {
 	case editComment:
 		v = oneLine(s.Comment)
 	}
-
-	in := textinput.New()
-	in.Prompt = f.label + ": "
-	st := textinput.DefaultDarkStyles()
-	st.Focused.Prompt = lipgloss.NewStyle()
-	st.Focused.Text = lipgloss.NewStyle()
-	st.Cursor.Blink = false // a blinking cursor needs tick messages routed back to it
-	in.SetStyles(st)
-	in.SetValue(v) // puts the cursor at the end
-	in.Focus()
+	in := newPromptInput(f.label+": ", v, m.width)
 	m.edit = &editPrompt{id: t.ID, field: f, input: in, orig: v}
-	m.sizeEdit()
-}
-
-// sizeEdit fits the input to the status line, so a long value scrolls
-// sideways and keeps the cursor on screen.
-func (m *Library) sizeEdit() {
-	if m.edit == nil {
-		return
-	}
-	// One space of padding on each side, the prompt, and a cell for the
-	// cursor past the end.
-	w := m.width - 2 - lipgloss.Width(m.edit.input.Prompt) - 1
-	m.edit.input.SetWidth(max(w, 1))
 }
 
 // editKey handles a key while an edit prompt is open: enter writes the

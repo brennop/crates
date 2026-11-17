@@ -4,19 +4,23 @@ import (
 	"strings"
 	"unicode"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/brennop/crates/model"
 )
 
-// searchPrompt is the open / prompt: what has been typed so far, and the
-// cursor row and view it opened on. The search starts from origin, and esc
-// puts both back.
+// searchPrompt is the open / prompt: the line being typed, and the cursor
+// row and view it opened on. The search starts from origin, and esc puts
+// both back.
 type searchPrompt struct {
-	query     string
+	input     textinput.Model
 	origin    int
 	originTop int
 }
+
+// query is the pattern typed so far.
+func (s *searchPrompt) query() string { return s.input.Value() }
 
 // moveFrom moves the cursor to row, scrolling from the view the prompt
 // opened on. As in vim, every keystroke places the match against that view,
@@ -91,12 +95,12 @@ func (m *Library) findMatch(pat string, from int, forward bool) (row int, wrappe
 
 // openSearch opens the / prompt at the cursor.
 func (m *Library) openSearch() {
-	m.search = &searchPrompt{origin: m.cursor, originTop: m.top}
+	m.search = &searchPrompt{input: newPromptInput("/", "", m.width), origin: m.cursor, originTop: m.top}
 }
 
-// searchKey handles a key while the / prompt is open. Typing moves the
-// cursor to the first match from where the prompt opened (incsearch); enter
-// accepts and plays it, esc puts the cursor back.
+// searchKey handles a key while the / prompt is open. Editing the line
+// moves the cursor to the first match from where the prompt opened
+// (incsearch); enter accepts and plays it, esc puts the cursor back.
 func (m *Library) searchKey(msg tea.KeyPressMsg) tea.Cmd {
 	s := m.search
 	switch msg.String() {
@@ -106,7 +110,7 @@ func (m *Library) searchKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case "enter":
 		m.search = nil
-		pat := s.query
+		pat := s.query()
 		if pat == "" {
 			pat = m.lastSearch
 		}
@@ -126,25 +130,27 @@ func (m *Library) searchKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.moveFrom(s, row)
 		return m.selectionMoved()
 	case "backspace":
-		if s.query == "" {
+		if s.query() == "" {
 			m.search = nil
 			m.restore(s)
 			return nil
 		}
-		r := []rune(s.query)
-		s.query = string(r[:len(r)-1])
-	default:
-		if msg.Text == "" {
-			return nil
-		}
-		s.query += msg.Text
 	}
-	if row, _, ok := m.findMatch(s.query, s.origin, true); ok {
+	return m.searchUpdate(msg)
+}
+
+// searchUpdate passes msg to the input, then moves the cursor to the first
+// match of the new pattern, or back to where the prompt opened.
+func (m *Library) searchUpdate(msg tea.Msg) tea.Cmd {
+	s := m.search
+	var cmd tea.Cmd
+	s.input, cmd = s.input.Update(msg)
+	if row, _, ok := m.findMatch(s.query(), s.origin, true); ok {
 		m.moveFrom(s, row)
 	} else {
 		m.restore(s)
 	}
-	return nil
+	return cmd
 }
 
 // searchNext moves to the next match of the last pattern, forward for n and

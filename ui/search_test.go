@@ -99,7 +99,7 @@ func TestSearchIncremental(t *testing.T) {
 	if m.cursor != 2 {
 		t.Fatalf("cursor %d, want 2 (Charlie)", m.cursor)
 	}
-	if !strings.Contains(m.View().Content, "/char█") {
+	if !strings.Contains(m.View().Content, "/char") {
 		t.Error("status line lacks the prompt")
 	}
 
@@ -198,7 +198,7 @@ func TestSearchPromptTakesKeys(t *testing.T) {
 			}
 		}
 	}
-	if m.search == nil || m.search.query != "qsxpn" || m.confirm != nil || m.dialog != nil || m.sortBy != defaultSort {
+	if m.search == nil || m.search.query() != "qsxpn" || m.confirm != nil || m.dialog != nil || m.sortBy != defaultSort {
 		t.Fatalf("prompt %+v, confirm %v, dialog %v, sort %d", m.search, m.confirm, m.dialog, m.sortBy)
 	}
 }
@@ -219,5 +219,30 @@ func TestSearchNotFound(t *testing.T) {
 	}
 	if !strings.Contains(m.View().Content, "Pattern not found: zzz") {
 		t.Error("view lacks the not-found status")
+	}
+}
+
+func TestSearchReadlineKeys(t *testing.T) {
+	_, m := searchLibrary(t)
+	feed(t, m, key("/"))
+	typeText(t, m, "xx delta")
+	if m.cursor != 0 {
+		t.Fatalf("no match moved the cursor to %d", m.cursor)
+	}
+	feed(t, m, tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
+	feed(t, m, tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
+	feed(t, m, tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
+	feed(t, m, tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl}) // "delta"
+	if m.search.query() != "delta" || m.cursor != 3 {
+		t.Fatalf("ctrl+d: query %q, cursor %d", m.search.query(), m.cursor)
+	}
+	feed(t, m, tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
+	feed(t, m, tea.KeyPressMsg{Code: 'w', Mod: tea.ModCtrl})
+	if m.search.query() != "" || m.cursor != 0 {
+		t.Fatalf("ctrl+w: query %q, cursor %d", m.search.query(), m.cursor)
+	}
+	feed(t, m, tea.PasteMsg{Content: "late\nnight"})
+	if m.search.query() != "late night" || m.cursor != 2 {
+		t.Fatalf("paste: query %q, cursor %d", m.search.query(), m.cursor)
 	}
 }
