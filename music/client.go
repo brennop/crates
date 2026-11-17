@@ -9,8 +9,9 @@ import (
 	"github.com/brennop/crates/model"
 )
 
-// Client is Apple Music, reached one call at a time. The osascript client is
-// Phase 7; Fake stands in for it in app tests.
+// Client is Apple Music, reached one call at a time. OSA (darwin) runs the
+// embedded scripts; Disabled stands in when Music is off; Fake stands in
+// for it in app tests.
 //
 // Errors are model typed errors where one fits: ErrMusicUnavailable when
 // Music is not running and autolaunch is off, ErrAutomationDenied for

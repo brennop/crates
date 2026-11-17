@@ -39,8 +39,8 @@ const reloadWindow = 10 * time.Second
 // methods are safe from any goroutine, return values or model typed errors,
 // and report background work on the bus. None waits on the UI.
 //
-// Lock order: opMu, then the library's Exclusive, then pmu, then smu, then
-// mmu.
+// Lock order: passMu, then opMu, then the library's Exclusive, then pmu,
+// then smu, then mmu, then recMu.
 type App struct {
 	lib      *library.Library
 	tags     tags.Store
@@ -70,7 +70,25 @@ type App struct {
 	mmu  sync.Mutex
 	snap music.Snapshot
 
+	// The reconciler. musicOn is fixed at New.
+	musicOn bool
+	passMu  sync.Mutex    // one reconcile pass at a time
+	kick    chan struct{} // buffered 1: run a pass
+	recDone chan struct{} // closed when the reconciler stops
+
+	// recMu guards the fields below.
+	recMu      sync.Mutex
+	recStarted bool
+	state      model.MusicState
+	stateKnown bool // state was set at least once
+	latched    bool // an add found the copy setting on: no adds until restart
+	promoted   []model.TrackID
+	pending    int  // tracks in the ImportPending awaiting an answer; 0 = none
+	confirmed  bool // the user confirmed an import; cleared when one completes
+	dead       []events.DeadEntry
+
 	inbox  *events.Bus // player events, handled by run
+	ctx    context.Context
 	cancel context.CancelFunc
 	done   chan struct{}
 	now    func() time.Time
@@ -103,6 +121,8 @@ func (realFS) Delete(path string, mode fsops.Mode) error      { return fsops.Del
 
 // New builds the app and its player and starts handling player events. The
 // library should already be open; starting its sweeps is the caller's job.
+// Start starts the reconciler. With Settings.Music.Enabled off, Music should
+// be music.Disabled; the reconciler stays off.
 func New(cfg Config) (*App, error) {
 	if cfg.Library == nil || cfg.Tags == nil || cfg.Music == nil || cfg.NewPlayer == nil || cfg.Bus == nil {
 		return nil, errors.New("app: library, tags, music, player and bus are required")
@@ -121,7 +141,12 @@ func New(cfg Config) (*App, error) {
 		mode:     mode,
 		fs:       realFS{},
 		pos:      -1,
+		musicOn:  cfg.Settings.Music.Enabled,
+		kick:     make(chan struct{}, 1),
+		recDone:  make(chan struct{}),
+		state:    model.MusicUnavailable,
 		inbox:    events.NewBus(),
+		ctx:      ctx,
 		cancel:   cancel,
 		done:     make(chan struct{}),
 		now:      time.Now,
@@ -131,15 +156,26 @@ func New(cfg Config) (*App, error) {
 		cancel()
 		return nil, err
 	}
+	if !a.musicOn {
+		a.state = model.MusicDisabled
+	}
+	a.music = trackedClient{Client: cfg.Music, a: a}
 	a.player = p
 	go a.run(ctx)
 	return a, nil
 }
 
-// Close stops handling player events and closes the player.
+// Close stops the reconciler and the handling of player events, and closes
+// the player. A Music call in flight is cancelled.
 func (a *App) Close() error {
 	a.cancel()
 	<-a.done
+	a.recMu.Lock()
+	started := a.recStarted
+	a.recMu.Unlock()
+	if started {
+		<-a.recDone
+	}
 	return a.player.Close()
 }
 

@@ -6,7 +6,7 @@ Library at the time: 1375 file tracks, no URL, shared or catalog tracks, every t
 
 ## Scripts
 
-`spike/music/`: JXA, one file per call, plus `lib.js`, a shared prelude that the `run` wrapper puts in front of each script. The Go client (7.1) should embed both and concatenate them the same way.
+`spike/music/`: JXA, one file per call, plus `lib.js`, a shared prelude that the `run` wrapper puts in front of each script. The Go client (7.1) should embed both and concatenate them the same way. Phase 7 moved them to `music/scripts/` and changed three: `playlist-add` and `playlist-remove` now return `{before, trackIDs}` and `playlist-add` skips current members; `delete` returns `{deleted, remaining}`.
 
 - Invocation: `osascript -l JavaScript -e "<lib.js + script.js>" arg…`. Arguments arrive in `run(argv)`, including ones that start with `-`.
 - Output is always one JSON line: `{"ok":true,"result":…}` or `{"ok":false,"error":{"number":N,"message":"…"}}`. Exceptions are caught in the prelude, so osascript exits 0 with a JSON error in most cases.

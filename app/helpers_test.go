@@ -141,6 +141,12 @@ var tagged = model.TagSummary{Title: "Title", Artist: "Artist", Album: "Album"}
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
+	return newEnvWith(t, nil)
+}
+
+// newEnvWith is newEnv with settings changed by edit before App is built.
+func newEnvWith(t *testing.T, edit func(*config.Config)) *env {
+	t.Helper()
 	root, err := pathnorm.Normalize(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -180,6 +186,9 @@ func newEnv(t *testing.T) *env {
 	})
 	settings := config.Defaults()
 	settings.DeleteMode = config.DeleteRemove
+	if edit != nil {
+		edit(&settings)
+	}
 	e.app, err = New(Config{
 		Library: e.lib,
 		Tags:    e.tags,

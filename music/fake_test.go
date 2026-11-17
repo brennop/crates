@@ -120,3 +120,34 @@ func TestSnapshotPatches(t *testing.T) {
 		t.Fatal("playlist lookup")
 	}
 }
+
+func TestVerifyMembers(t *testing.T) {
+	if got := expectAdd([]string{"A", "B"}, []string{"B", "C", "C"}); !slices.Equal(got, []string{"A", "B", "C"}) {
+		t.Errorf("expectAdd = %q", got)
+	}
+	if got := expectRemove([]string{"A", "B", "A"}, []string{"A"}); !slices.Equal(got, []string{"B"}) {
+		t.Errorf("expectRemove = %q", got)
+	}
+	if err := verifyMembers("P", []string{"B", "A"}, []string{"A", "B"}); err != nil {
+		t.Errorf("reordered: %v", err)
+	}
+	for _, got := range [][]string{{"A"}, {"A", "B", "B"}, {"A", "C"}} {
+		if err := verifyMembers("P", got, []string{"A", "B"}); !errors.As(err, new(model.ErrVerifyFailed)) {
+			t.Errorf("%q: %v", got, err)
+		}
+	}
+}
+
+func TestDisabled(t *testing.T) {
+	var d Disabled
+	ctx := context.Background()
+	if st, err := d.Status(ctx); err != nil || st != model.MusicDisabled {
+		t.Errorf("status %v, %v", st, err)
+	}
+	if s, err := d.Snapshot(ctx); err != nil || len(s.Tracks) != 0 || s.Taken.IsZero() {
+		t.Errorf("snapshot %+v, %v", s, err)
+	}
+	if _, err := d.Add(ctx, "/x"); !errors.Is(err, ErrDisabled) {
+		t.Errorf("add %v", err)
+	}
+}

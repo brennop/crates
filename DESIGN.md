@@ -231,6 +231,7 @@ Add or remove by `MusicID` and playlist ID (adds skip tracks already in the play
 
 Runs after each Music snapshot and each master sweep, and only with a snapshot newer than the sweep.
 
+- **`MusicID`s come from the snapshot.** The cache does not store them; each pass attaches them by path, and clears one whose entry is gone from Music. Refresh and focus sweep master first and read the snapshot second, so the snapshot is the newer one.
 - **Master track with no `MusicID`:** `add`, verify the location, store the ID.
 - **Music entry inside master whose file is missing:** emit `DeadEntry`. Never auto-delete.
 - **Safety valve:** if one pass wants to add more than 100 tracks, emit `ImportPending` with the count and wait for `ConfirmImport` or `CancelImport`. A path-matching bug would otherwise look like "nothing is in Music" and trigger a mass add. The first run on an existing master dir trips the valve by design, and the user confirms the import once.

@@ -124,11 +124,6 @@ func (a *App) promoteLocked(t model.Track) (missed bool, err error) {
 	return false, nil
 }
 
-// handToReconciler queues a newly promoted master track for adding to
-// Music. The reconciler arrives in Phase 7 (task 7.8); until then the
-// master sweep that follows any snapshot picks the track up.
-func (a *App) handToReconciler(model.TrackID) {}
-
 // sweepMaster runs a master sweep in the background and reports failures.
 func (a *App) sweepMaster() {
 	if err := a.lib.SweepMaster(context.Background()); err != nil && !errors.Is(err, library.ErrNotStarted) && !errors.Is(err, library.ErrClosed) {
@@ -256,6 +251,8 @@ func (a *App) delete(ctx context.Context, id model.TrackID) error {
 
 	if err := a.fs.Delete(t.Path, a.mode); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		if inMusic {
+			// The file stays in master, so it goes back into Music.
+			a.handToReconciler(id)
 			return model.ErrPlaylistsLost{Path: t.Path, Err: err}
 		}
 		return err

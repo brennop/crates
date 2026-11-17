@@ -395,3 +395,45 @@ func TestDeletedCacheFileTriggersFullScan(t *testing.T) {
 		t.Errorf("full scan indexed %d tracks, want 1", n)
 	}
 }
+
+func TestMasterSweptAndTracks(t *testing.T) {
+	e := newEnv(t)
+	put(t, filepath.Join(e.master, "a.mp3"), 10)
+	put(t, filepath.Join(e.inbox, "b.mp3"), 10)
+	l := e.open()
+	defer e.close(l)
+
+	at, ch := l.MasterSwept()
+	if !at.IsZero() {
+		t.Fatalf("swept at %v before any sweep", at)
+	}
+	before := time.Now()
+	if err := l.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-ch:
+	case <-time.After(10 * time.Second):
+		t.Fatal("startup pass did not mark the master swept")
+	}
+	first, ch := l.MasterSwept()
+	if first.Before(before) {
+		t.Errorf("swept at %v, before Start at %v", first, before)
+	}
+	ms := l.MasterTracks()
+	if len(ms) != 1 || filepath.Base(ms[0].Path) != "a.mp3" || ms[0].Role != model.Master {
+		t.Errorf("master tracks = %+v", ms)
+	}
+
+	if err := l.SweepMaster(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-ch:
+	default:
+		t.Fatal("SweepMaster returned before marking the sweep")
+	}
+	if second, _ := l.MasterSwept(); !second.After(first) {
+		t.Errorf("second sweep at %v, not after %v", second, first)
+	}
+}

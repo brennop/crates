@@ -129,6 +129,7 @@ func (l *Library) scanRoot(ctx context.Context, r *root) error {
 	if _, err := os.Stat(r.dir); err != nil {
 		return err
 	}
+	start := time.Now()
 	l.fsMu.Lock()
 	files, complete, err := listRoot(r)
 	if err != nil {
@@ -215,6 +216,9 @@ func (l *Library) scanRoot(ctx context.Context, r *root) error {
 			l.sink.Publish(events.TrackRemoved{IDs: removed})
 		}
 		l.fsMu.Unlock()
+		if r.role == model.Master {
+			l.markSwept(start)
+		}
 	}
 	l.progress(total, total, true)
 	return nil

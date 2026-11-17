@@ -50,7 +50,9 @@ type Library struct {
 	// commits, and while it removes vanished tracks; and by Exclusive.
 	fsMu sync.Mutex
 
-	mu      sync.Mutex // guards the fields below
+	mu      sync.Mutex    // guards the fields below
+	sweptAt time.Time     // start of the last complete master sweep; zero = none yet
+	swept   chan struct{} // closed when the next master sweep completes
 	started bool
 	closed  bool
 	waiters []chan error // master sweep requests not yet served
@@ -92,6 +94,7 @@ func Open(cfg Config) (*Library, error) {
 		cache:   c,
 		workers: runtime.NumCPU(),
 		wake:    make(chan struct{}, 1),
+		swept:   make(chan struct{}),
 	}
 	var stale []model.TrackID
 	for _, t := range tracks {
@@ -234,6 +237,31 @@ func (l *Library) SetMusicID(id model.TrackID, musicID string) error {
 	}
 	l.sink.Publish(events.TracksChanged{Tracks: []model.Track{t}})
 	return nil
+}
+
+// MasterTracks returns copies of every master track.
+func (l *Library) MasterTracks() []model.Track { return l.idx.under(l.roots[0]) }
+
+// MasterCaseSensitive reports whether the master volume tells names apart
+// by case. Keys built with pathnorm.Key must use it.
+func (l *Library) MasterCaseSensitive() bool { return l.roots[0].caseSensitive }
+
+// MasterSwept returns when the last complete master sweep started (zero if
+// none has completed yet), and a channel that is closed when the next one
+// completes. The startup pass counts as a sweep.
+func (l *Library) MasterSwept() (time.Time, <-chan struct{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.sweptAt, l.swept
+}
+
+// markSwept records a complete master sweep that started at start.
+func (l *Library) markSwept(start time.Time) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.sweptAt = start
+	close(l.swept)
+	l.swept = make(chan struct{})
 }
 
 // MasterDir returns the normalized master dir.

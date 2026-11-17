@@ -100,8 +100,8 @@ func (a *App) editPlaylist(ctx context.Context, ids []model.TrackID, playlistID 
 	return nil
 }
 
-// refreshSnapshot reads a new Music snapshot and publishes
-// PlaylistsChanged.
+// refreshSnapshot reads a new Music snapshot, publishes PlaylistsChanged
+// and asks the reconciler for a pass.
 func (a *App) refreshSnapshot(ctx context.Context) error {
 	s, err := a.music.Snapshot(ctx)
 	if err != nil {
@@ -111,6 +111,7 @@ func (a *App) refreshSnapshot(ctx context.Context) error {
 	a.snap = s
 	a.mmu.Unlock()
 	a.bus.Publish(events.PlaylistsChanged{})
+	a.kickReconciler()
 	return nil
 }
 
@@ -127,11 +128,14 @@ func (a *App) refreshAfterFailure(ctx context.Context) {
 // calls it when the terminal regains focus.
 func (a *App) FocusGained(ctx context.Context) error { return a.Refresh(ctx) }
 
-// Refresh sweeps the master dir and refreshes the Music snapshot, at once.
-// It returns when both are done.
+// Refresh sweeps the master dir, then refreshes the Music snapshot, and
+// returns when both are done. The snapshot comes second so that it is newer
+// than the sweep, which the reconciler needs; the reconciler then runs in
+// the background.
 func (a *App) Refresh(ctx context.Context) error {
-	sweep := make(chan error, 1)
-	go func() { sweep <- a.lib.SweepMaster(ctx) }()
-	serr := a.refreshSnapshot(ctx)
-	return errors.Join(<-sweep, serr)
+	serr := a.lib.SweepMaster(ctx)
+	if !a.musicOn {
+		return serr
+	}
+	return errors.Join(serr, a.refreshSnapshot(ctx))
 }

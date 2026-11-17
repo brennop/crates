@@ -1,8 +1,8 @@
 #!/bin/sh
 # Usage: run <script> [args...]
 # Concatenates lib.js and <script>.js and runs it with osascript, passing the
-# remaining arguments as argv. The Go client (task 7.1) does the same thing
-# with embedded sources.
+# remaining arguments as argv: the same thing the Go client does with the
+# embedded sources. For manual checks against the real library.
 set -eu
 dir=$(cd "$(dirname "$0")" && pwd)
 name=$1
