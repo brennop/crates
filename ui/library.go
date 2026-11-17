@@ -95,8 +95,10 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "space":
 			return m, TogglePause(m.ctx, m.app)
 		}
+		prev := m.table.Cursor()
 		var cmd tea.Cmd
 		m.table, cmd = m.table.Update(msg)
+		m.cursorMoved(prev)
 		return m, tea.Batch(cmd, m.selectionMoved())
 
 	case libraryLoaded:
@@ -149,7 +151,7 @@ func (m *Library) handleEvent(e events.Event) tea.Cmd {
 		return m.load()
 	case events.PlayerState:
 		m.player = e
-		m.refreshRows() // the playing marker moved or changed
+		m.refreshRows(m.table.Cursor()) // the playing marker moved or changed
 	case events.LoadFailed:
 		m.status = fmt.Sprintf("cannot play %s: %s", e.Path, e.Reason)
 	case events.PlayerDown:
@@ -166,7 +168,6 @@ func (m *Library) handleEvent(e events.Event) tea.Cmd {
 func (m *Library) setTracks(ts []model.Track) tea.Cmd {
 	keep := m.selected()
 	m.tracks = ts
-	m.refreshRows()
 	cursor := 0
 	for i, t := range ts {
 		if t.ID == keep {
@@ -174,6 +175,7 @@ func (m *Library) setTracks(ts []model.Track) tea.Cmd {
 			break
 		}
 	}
+	m.refreshRows(cursor)
 	if len(ts) > 0 {
 		m.table.SetCursor(cursor)
 	}
@@ -200,15 +202,34 @@ func (m *Library) selected() model.TrackID {
 	return m.tracks[i].ID
 }
 
-func (m *Library) refreshRows() {
+// refreshRows rebuilds every row; cursor is the row the table will select.
+func (m *Library) refreshRows(cursor int) {
 	rows := make([]table.Row, len(m.tracks))
 	for i, t := range m.tracks {
-		rows[i] = m.row(t)
+		rows[i] = m.row(t, i == cursor)
 	}
 	m.table.SetRows(rows)
 }
 
-func (m *Library) row(t model.Track) table.Row {
+// cursorMoved rebuilds the rows the cursor left and landed on, since the
+// selected row is drawn without the Key and BPM tints.
+func (m *Library) cursorMoved(prev int) {
+	cur := m.table.Cursor()
+	if cur == prev {
+		return
+	}
+	rows := m.table.Rows()
+	for _, i := range []int{prev, cur} {
+		if i >= 0 && i < len(rows) && i < len(m.tracks) {
+			rows[i] = m.row(m.tracks[i], i == cur)
+		}
+	}
+	m.table.SetRows(rows)
+}
+
+// row renders t. The selected row stays plain: a tint's closing reset would
+// clear the selection background for the rest of the row.
+func (m *Library) row(t model.Track, selected bool) table.Row {
 	s := t.Summary
 	title := s.Title
 	if title == "" {
@@ -221,8 +242,17 @@ func (m *Library) row(t model.Track) table.Row {
 			mark = "‖ "
 		}
 	}
+	key := s.Key
 	bpm, _ := s.Field(model.FieldBPM)
-	return table.Row{mark + title, s.Artist, s.Genre, s.Key, bpm, clock(t.Duration), oneLine(s.Comment)}
+	if !selected {
+		if h, ok := keyHue(key); ok {
+			key = tint(key, h)
+		}
+		if s.BPM > 0 {
+			bpm = tint(bpm, bpmHue(s.BPM))
+		}
+	}
+	return table.Row{mark + title, s.Artist, s.Genre, key, bpm, clock(t.Duration), oneLine(s.Comment)}
 }
 
 func (m *Library) View() tea.View {

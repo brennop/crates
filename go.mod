@@ -9,6 +9,7 @@ require (
 	codeberg.org/derat/mpeg v0.0.0-20260508234456-e65f288d7f2e
 	github.com/BurntSushi/toml v1.4.0
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
+	github.com/lucasb-eyer/go-colorful v1.3.0
 	golang.org/x/text v0.16.0
 	modernc.org/sqlite v1.44.3
 )
@@ -25,7 +26,6 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hjfreyer/taglib-go v0.0.0-20250508221915-cb3b18d1ad7b // indirect
-	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.20 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
