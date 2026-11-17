@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -122,5 +123,48 @@ func TestBeatportRefreshesStoredToken(t *testing.T) {
 	}
 	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o600 {
 		t.Fatalf("token file mode %v", fi.Mode())
+	}
+}
+
+// Cases from the real library where the first artist match was wrong.
+func TestBestMatch(t *testing.T) {
+	tr := func(artists, name, mix string, secs int64) bpTrack {
+		var c bpTrack
+		c.Name, c.MixName, c.LengthMS = name, mix, secs*1000
+		for _, a := range strings.Split(artists, ", ") {
+			c.Artists = append(c.Artists, struct {
+				Name string `json:"name"`
+			}{a})
+		}
+		return c
+	}
+	kylie := []bpTrack{
+		tr("Kylie Minogue", "Tension", "Extended Mix", 278),
+		tr("Kylie Minogue", "Tension", "Original Mix", 216),
+		tr("Kylie Minogue", "Tension", "Chromeo Remix", 246),
+	}
+	chemise := []bpTrack{
+		tr("Purple Disco Machine, Chemise", "She Can't Love You", "Purple Disco Machine Edit", 270),
+		tr("Chemise", "She Can't Love You", "Original Mix", 326),
+		tr("Chemise", "She Can't Love You", "Remix", 377),
+	}
+	for _, c := range []struct {
+		name string
+		in   []bpTrack
+		t    Track
+		want string // "" = not found
+	}{
+		{"closest length", kylie, Track{Artist: "Kylie Minogue", Title: "Tension", Duration: 216 * time.Second}, "Original Mix"},
+		{"named version without a length", chemise, Track{Artist: "Chemise", Title: "She Can't Love You (Remix)"}, "Remix"},
+		{"closest length over the first credit", chemise, Track{Artist: "Chemise", Title: "She Can't Love You (Remix)", Duration: 377 * time.Second}, "Remix"},
+		{"another song by the artist", []bpTrack{tr("JonEcks, Lotso", "klaSH", "", 178)}, Track{Artist: "Lotso", Title: "boogiewondaland"}, ""},
+		{"the title by another artist", []bpTrack{tr("Oppidan, camoufly", "hold tight", "Original Mix", 148)}, Track{Artist: "Azuro", Title: "Hold Tight (Edit)"}, ""},
+		{"several artists, accents", []bpTrack{tr("Traumer, Anton, antraum", "Ju", "Traumer Sunset Mix", 349), tr("Rita Lee, Roberto De Carvalho", "Lança Perfume", "Original Mix", 314)},
+			Track{Artist: "Rita Lee/Roberto de Carvalho", Title: "Lanca perfume"}, "Original Mix"},
+	} {
+		m, ok := bestMatch(c.in, c.t)
+		if got := map[bool]string{true: m.MixName}[ok]; got != c.want || ok != (c.want != "") {
+			t.Errorf("%s: picked %q (ok %v), want %q", c.name, m.String(), ok, c.want)
+		}
 	}
 }

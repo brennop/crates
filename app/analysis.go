@@ -19,7 +19,7 @@ func (a *App) Analyze(ctx context.Context, id model.TrackID, job analysis.Job) a
 	defer cancel()
 	stop := context.AfterFunc(a.ctx, cancel)
 	defer stop()
-	return a.analyzer.Run(ctx, job, analysis.Track{Path: t.Path, Artist: t.Summary.Artist, Title: t.Summary.Title})
+	return a.analyzer.Run(ctx, job, analysis.Track{Path: t.Path, Artist: t.Summary.Artist, Title: t.Summary.Title, Duration: t.Duration})
 }
 
 // HasBeatportToken reports whether a Beatport token is saved, whether or

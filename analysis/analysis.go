@@ -80,6 +80,7 @@ type Result struct {
 // Track is what a job needs to know about a track.
 type Track struct {
 	Path, Artist, Title string
+	Duration            time.Duration // 0: unknown; picks among a song's versions on Beatport
 }
 
 // Options configure an Analyzer.
