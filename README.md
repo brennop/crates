@@ -24,6 +24,8 @@ go build -o crates .
 
 The Library view is a table of the master tracks: title, artist, genre, key, BPM, length and comments. It starts sorted by artist; `s` cycles the sort in column order (title, artist, genre, key, BPM, length, then around again), and a `▲` marks the sorted column. Keys are shown in Camelot notation (`8A`, read from Camelot, Open Key or musical notation tags; anything else is shown as tagged) and sort around the Camelot wheel, `1A 1B 2A …`, with unreadable keys last. The selected track plays: move with `↑`/`↓` (or `j`/`k`, `pgup`/`pgdown`, `g`/`G`), and the row under the cursor starts once you stop on it. Key and BPM cells get a background color by value: keys by their place on the Camelot wheel (a key and its relative major/minor share a color), BPM around the color wheel once every 90 BPM. `space` pauses, `q` quits.
 
+`p` opens the playlists of the selected track: Music's editable playlists, each with a checkbox. Move with `↑`/`↓` (or `j`/`k`, `g`/`G`), and `space` or `enter` adds the track to the playlist under the cursor, or removes it. `esc`, `p` or `q` closes the dialog. Smart playlists and folders are not listed, and a track that is not in Music yet has no playlists to edit.
+
 ## Apple Music settings
 
 The master folder must live in the Music library as plain file references, never as copies. Before the first run:

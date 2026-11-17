@@ -38,6 +38,8 @@ type Library struct {
 
 	sortBy int // index into sortOrders
 
+	dialog *playlistDialog // nil when closed
+
 	width, height int
 	cols          []table.Column // current widths, so row can fill its cells
 }
@@ -118,9 +120,21 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
+		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
+		}
+		if m.dialog != nil {
+			closed, cmd := m.dialog.update(m.ctx, m.app, msg)
+			if closed {
+				m.dialog = nil
+			}
+			return m, cmd
+		}
+		switch msg.String() {
+		case "q":
+			return m, tea.Quit
+		case "p":
+			return m, m.openDialog()
 		case "space":
 			return m, TogglePause(m.ctx, m.app)
 		case "s":
@@ -167,6 +181,17 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "stop: " + msg.Err.Error()
 		}
 		return m, nil
+	case playlistDialogLoaded:
+		if m.dialog != nil {
+			m.dialog.loaded(msg)
+		}
+		return m, nil
+	case AddToPlaylistResult:
+		m.playlistWritten(msg.IDs, msg.PlaylistID, true, msg.Err)
+		return m, nil
+	case RemoveFromPlaylistResult:
+		m.playlistWritten(msg.IDs, msg.PlaylistID, false, msg.Err)
+		return m, nil
 	case TogglePauseResult:
 		if msg.Err != nil {
 			m.status = "pause: " + msg.Err.Error()
@@ -193,8 +218,38 @@ func (m *Library) handleEvent(e events.Event) tea.Cmd {
 		m.requested = 0
 	case events.Error:
 		m.status = e.Op + ": " + e.Err.Error()
+	case events.PlaylistsChanged:
+		if m.dialog != nil {
+			return m.dialog.load(m.app)
+		}
 	}
 	return nil
+}
+
+// openDialog opens the playlist dialog on the selected track.
+func (m *Library) openDialog() tea.Cmd {
+	i := m.table.Cursor()
+	if i < 0 || i >= len(m.tracks) {
+		return nil
+	}
+	t := m.tracks[i]
+	if t.MusicID == "" {
+		m.status = "playlists: track is not in Music yet"
+		return nil
+	}
+	m.dialog = newPlaylistDialog(t)
+	return m.dialog.load(m.app)
+}
+
+// playlistWritten routes a playlist write's result to the dialog, or to
+// the status line when the dialog was not waiting on it.
+func (m *Library) playlistWritten(ids []model.TrackID, pid string, add bool, err error) {
+	if m.dialog != nil && m.dialog.done(ids, pid, add, err) {
+		return
+	}
+	if err != nil {
+		m.status = "playlist: " + err.Error()
+	}
 }
 
 // setTracks replaces the rows, keeping the cursor on the same track when it
@@ -305,7 +360,11 @@ func (m *Library) row(t model.Track, selected bool) table.Row {
 func (m *Library) View() tea.View {
 	title := titleStyle.Render(fmt.Sprintf("Library · %d tracks", len(m.tracks))) +
 		statusStyle.Render("sorted by "+sortOrders[m.sortBy].name+" · s to change")
-	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, title, m.table.View(), m.statusLine()))
+	content := lipgloss.JoinVertical(lipgloss.Left, title, m.table.View(), m.statusLine())
+	if m.dialog != nil {
+		content = overlay(content, m.dialog.view(m.width, m.height), m.width, m.height)
+	}
+	v := tea.NewView(content)
 	v.AltScreen = true
 	v.WindowTitle = "crates"
 	return v
@@ -317,7 +376,7 @@ func (m *Library) statusLine() string {
 	}
 	p := m.player
 	if p.Idle || p.TrackID == 0 {
-		return statusStyle.Render("stopped · space pause · s sort · q quit")
+		return statusStyle.Render("stopped · space pause · s sort · p playlists · q quit")
 	}
 	name := baseName(p.Path)
 	for _, t := range m.tracks {
