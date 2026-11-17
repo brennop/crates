@@ -64,13 +64,13 @@ Tuning values are constants, not config keys:
 
 &#91;embedded content: package layout · ui, app, four core packages, four externals\]
 
-Calls go down and events come back up through one channel. No package under `app` imports another, except the leaf packages `events`, `model` and `pathnorm`, which any package may import. Nothing below `ui` imports Bubble Tea.
+Calls go down and events come back up through one channel. The program itself is `package main` at the module root, the top layer, above `ui`. No package under `app` imports another, except the leaf packages `events`, `model` and `pathnorm`, which any package may import. Nothing below `ui` imports Bubble Tea.
 
 The shared types need leaf packages. `Track` cannot live in `library`: `TracksChanged` carries it and `library` publishes to the bus, which would cycle through `events`. `music` needs path normalization but may not import `library`.
 
 | Package | Responsibility |
 | --- | --- |
-| `cmd` | Read config, build the pieces, start the program |
+| `main` (module root) | Read config, build the pieces, start the program; `go run .` runs it |
 | `config` | TOML: roots, required tags, delete mode, Music options |
 | `ui` | Commands, result messages and the event pump over `app`; the Bubble Tea model and views are the developer's |
 | `app` | Facade for every operation that spans packages; play queue; reconciler |
