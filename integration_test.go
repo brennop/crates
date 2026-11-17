@@ -3,7 +3,7 @@
 // Integration tests: app driven headless with real mpv, kid3-cli and, where
 // asked, the real Music app. Run by hand:
 //
-//	go test -tags cratesint -run Integration -v -timeout 10m ./cmd/crates/
+//	go test -tags cratesint -run Integration -v -timeout 10m .
 //
 // TestIntegrationLocal needs mpv and kid3-cli and leaves Music alone (it
 // runs with [music] enabled = false). Its trash-mode delete sends one

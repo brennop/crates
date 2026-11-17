@@ -51,7 +51,7 @@ type playTick struct {
 	id  model.TrackID
 }
 
-// New builds the model. Its signature matches cmd/crates' newUI hook.
+// New builds the model. Its signature matches the newUI hook in the root package.
 func New(ctx context.Context, a *app.App, bus *events.Bus) tea.Model {
 	t := table.New(
 		table.WithColumns(columns(100)),

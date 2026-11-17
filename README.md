@@ -14,7 +14,7 @@ The design is in [DESIGN.md](DESIGN.md), and the API the UI is written against i
 Build and check the setup:
 
 ```sh
-go build -o crates ./cmd/crates
+go build -o crates .
 ./crates -check
 ```
 
@@ -86,6 +86,6 @@ go test -race ./...
 
 Integration tests run by hand and are described at the top of each file:
 
-- `go test -tags cratesint -run Integration -v ./cmd/crates/` runs the app with real mpv and kid3-cli. The Music parts need `CRATES_MUSIC_MASTER` and `CRATES_MUSIC_PLAYLIST`, and some need `CRATES_INT_EXPECT`.
+- `go test -tags cratesint -run Integration -v .` runs the app with real mpv and kid3-cli. The Music parts need `CRATES_MUSIC_MASTER` and `CRATES_MUSIC_PLAYLIST`, and some need `CRATES_INT_EXPECT`.
 - `go test -tags musicint -run Integration -v ./music/` runs the Music client alone.
 - `CRATES_INT_FINDER=1 go test -tags cratesint -run Integration -v ./fsops/` runs the Finder trash fallback.

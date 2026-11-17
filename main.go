@@ -1,9 +1,8 @@
 // Command crates is the music library manager.
 //
 // It reads the config, runs the startup checks, builds and starts the app,
-// and runs the UI. The Bubble Tea model is the developer's: assign newUI
-// (see ui.go). Until then, or with -headless, it runs without a UI and logs
-// every event to stderr until interrupted.
+// and runs the UI (newUI, in ui.go). With -headless it runs without a UI and
+// logs every event to stderr until interrupted.
 package main
 
 import (

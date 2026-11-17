@@ -142,7 +142,7 @@ Music errors anywhere above are `ErrMusicUnavailable` (not running, autolaunch o
 | `Capabilities(a)` | `CapabilitiesResult{Capabilities}` | — | — |
 | `Close(a)` | `CloseResult{Err}` | errors from closing the player, Music, kid3 or the cache, joined | none; stop the pump |
 
-`Close` is the one shutdown path: it stops the reconciler, quits mpv (removing its socket dir and pidfile), kills an osascript or kid3-cli call in flight, removes kid3's private config, then flushes and closes the cache. A second `Close` does nothing. `cmd/crates` closes the app after the program returns, so the model only needs `Close(a)` if it wants the result before quitting.
+`Close` is the one shutdown path: it stops the reconciler, quits mpv (removing its socket dir and pidfile), kills an osascript or kid3-cli call in flight, removes kid3's private config, then flushes and closes the cache. A second `Close` does nothing. `main` closes the app after the program returns, so the model only needs `Close(a)` if it wants the result before quitting.
 
 `Capabilities` is `{Kid3, TrashMethod, DeleteMode, MusicEnabled}`, fixed for the run. Hide tag editing without `Kid3`. `TrashMethod` is `command` (`/usr/bin/trash`) or `finder` (Finder through osascript, which needs the Automation permission for Finder). `DeleteMode` is `trash` or `remove`. Without `MusicEnabled`, hide playlists and Music status: `MusicStatus` stays `disabled`.
 
@@ -218,4 +218,4 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 ### Shutdown
 
-`cmd/crates` builds the model with `newUI(ctx, a, bus)` (in `cmd/crates/ui.go`). To quit, return `tea.Quit`. When the program returns, `cmd` cancels `ctx`, which ends calls in flight, and then closes the app. To show the close result before exiting, stop re-arming `WaitForEvent`, run `Close(a)`, and quit on `CloseResult`. The second `Close` that `cmd` makes does nothing.
+`main` builds the model with `newUI(ctx, a, bus)` (in `ui.go` at the root). To quit, return `tea.Quit`. When the program returns, `cmd` cancels `ctx`, which ends calls in flight, and then closes the app. To show the close result before exiting, stop re-arming `WaitForEvent`, run `Close(a)`, and quit on `CloseResult`. The second `Close` that `cmd` makes does nothing.

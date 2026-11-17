@@ -1,10 +1,11 @@
-package crates_test
+package main_test
 
 // Enforces the package layout's import rules:
 //
 //   - No package under app imports another, except the leaf packages events,
 //     model and pathnorm, which any package may import.
-//   - Calls only go down: cmd > ui > app > core packages > leaves.
+//   - Calls only go down: cmd (and the root main package) > ui > app > core
+//     packages > leaves.
 //   - Nothing below ui imports Bubble Tea (or any other Charm package).
 
 import (
@@ -31,7 +32,7 @@ var (
 // package (rank 0), so a new package starts out under the strictest rule.
 func rank(pkg string) int {
 	switch {
-	case pkg == "cmd" || strings.HasPrefix(pkg, "cmd/"):
+	case pkg == "." || pkg == "cmd" || strings.HasPrefix(pkg, "cmd/"):
 		return 3
 	case pkg == "ui":
 		return 2
@@ -112,7 +113,7 @@ func moduleImports(t *testing.T) map[string][]string {
 
 func TestImportRules(t *testing.T) {
 	pkgs := moduleImports(t)
-	for _, want := range []string{"cmd/crates", "config", "ui", "app", "library", "tags", "player", "music", "fsops", "events", "model", "pathnorm"} {
+	for _, want := range []string{".", "config", "ui", "app", "library", "tags", "player", "music", "fsops", "events", "model", "pathnorm"} {
 		if _, ok := pkgs[want]; !ok {
 			t.Errorf("package %s is missing", want)
 		}
