@@ -49,6 +49,8 @@ type Library struct {
 
 	dialog *playlistDialog // nil when closed
 
+	analysis *analysisPanel // nil when closed; see analysis.go
+
 	search     *searchPrompt // the / prompt; nil when closed
 	lastSearch string        // the pattern n and N repeat
 
@@ -227,6 +229,8 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case binding.Matches(msg, k.Playlists):
 			return m, m.openDialog()
+		case binding.Matches(msg, k.Analyze):
+			return m, m.toggleAnalysis()
 		case binding.Matches(msg, k.Delete):
 			if i := m.cursor; i >= 0 && i < len(m.tracks) {
 				m.confirm = newDeleteConfirm(m.tracks[i])
@@ -307,6 +311,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case DeleteResult:
 		m.deleted(msg.Summary)
+		return m, nil
+	case AnalyzeResult:
+		m.analyzed(msg)
 		return m, nil
 	case WriteTagsResult:
 		// The new value shows up through the TracksChanged reload.
@@ -506,6 +513,9 @@ func (m *Library) View() tea.View {
 	content := lipgloss.JoinVertical(lipgloss.Left, title, m.table.View(), m.statusLine())
 	if m.edit != nil && strings.TrimSpace(m.edit.vocab) != "" {
 		content = overlayBottom(content, m.edit.tagsPanel(m.width), m.height)
+	}
+	if m.analysis != nil {
+		content = overlayTopRight(content, m.analysis.view(m.width, m.spinner.View()), m.width)
 	}
 	if m.dialog != nil {
 		content = overlay(content, m.dialog.view(m.width, m.height, m.spinner.View()), m.width, m.height)

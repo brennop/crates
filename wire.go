@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/brennop/crates/analysis"
 	"github.com/brennop/crates/app"
 	"github.com/brennop/crates/config"
 	"github.com/brennop/crates/events"
@@ -116,6 +117,7 @@ func build(cfg config.Config, o options) (*app.App, *events.Bus, error) {
 		},
 		Bus:      bus,
 		Settings: cfg,
+		Analyzer: analysis.New(analysis.Options{BeatportToken: os.Getenv("BEATPORT_TOKEN")}),
 	})
 	if err != nil {
 		return nil, nil, err // New closed the pieces

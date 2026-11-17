@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/brennop/crates/analysis"
 	"github.com/brennop/crates/app"
 	"github.com/brennop/crates/events"
 	"github.com/brennop/crates/model"
@@ -277,6 +278,19 @@ type DeadEntriesResult struct {
 
 func DeadEntries(a *app.App) tea.Cmd {
 	return func() tea.Msg { return DeadEntriesResult{Entries: a.DeadEntries()} }
+}
+
+// ---- Analysis ----
+
+// AnalyzeResult carries one job's result for track ID.
+type AnalyzeResult struct {
+	ID     model.TrackID
+	Result analysis.Result
+}
+
+// Analyze runs one analysis job; batch one per job to run them in parallel.
+func Analyze(ctx context.Context, a *app.App, id model.TrackID, job analysis.Job) tea.Cmd {
+	return func() tea.Msg { return AnalyzeResult{ID: id, Result: a.Analyze(ctx, id, job)} }
 }
 
 // ---- Other ----

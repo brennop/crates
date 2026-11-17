@@ -135,6 +135,14 @@ Both read the last snapshot; nothing is shown until the first `Refresh` / `Focus
 
 Music errors anywhere above are `ErrMusicUnavailable` (not running, autolaunch off), `ErrAutomationDenied` (the Automation permission), `ErrCopySettingOn` (Music copied a file into its Media folder) and `music.ErrDisabled` (`[music] enabled = false`).
 
+### Analysis
+
+| Command | Result | Errors | Events after |
+| --- | --- | --- | --- |
+| `Analyze(ctx, a, id, job)` | `AnalyzeResult{ID, Result}` | in `Result.Err`: `ErrUnknownTrack`, `analysis.ErrNoUV`, `analysis.ErrNoBeatportToken`, a script's or Beatport's error | — |
+
+`job` is one of `analysis.Jobs`: `BPM` (Essentia's RhythmExtractor2013), `SKey` (Deezer's S-KEY), `EssentiaKey` (Essentia's KeyExtractor with the `edma`, `bgate` and `braw` profiles) and `Beatport` (a v4 catalog search for "artist title", with the token in `BEATPORT_TOKEN`). Batch one command per job to run them in parallel. Nothing is written; the results are only to read. The audio jobs run embedded Python scripts with `uv run --script`; the first run installs their environments, which takes minutes.
+
 ### Other
 
 | Command | Result | Errors | Events after |

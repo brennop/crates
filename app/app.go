@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/brennop/crates/analysis"
 	"github.com/brennop/crates/config"
 	"github.com/brennop/crates/events"
 	"github.com/brennop/crates/fsops"
@@ -27,6 +28,7 @@ type Config struct {
 	NewPlayer func(events.Sink) (player.Player, error)
 	Bus       events.Sink // the UI's bus
 	Settings  config.Config
+	Analyzer  *analysis.Analyzer // nil: one with no Beatport token
 }
 
 // ErrUnknownTrack: an ID is not in the index (deleted, or never there).
@@ -45,6 +47,7 @@ const reloadWindow = 10 * time.Second
 type App struct {
 	lib      *library.Library
 	tags     tags.Store
+	analyzer *analysis.Analyzer
 	music    music.Client  // wrapped to track Music's state
 	musicSvc music.Service // the unwrapped one, to close
 	player   player.Player
@@ -139,6 +142,7 @@ func New(cfg Config) (*App, error) {
 	a := &App{
 		lib:      cfg.Library,
 		tags:     cfg.Tags,
+		analyzer: cfg.Analyzer,
 		musicSvc: cfg.Music,
 		bus:      cfg.Bus,
 		required: append([]string(nil), cfg.Settings.RequiredTags...),
@@ -154,6 +158,9 @@ func New(cfg Config) (*App, error) {
 		cancel:   cancel,
 		done:     make(chan struct{}),
 		now:      time.Now,
+	}
+	if a.analyzer == nil {
+		a.analyzer = analysis.New(analysis.Options{})
 	}
 	p, err := cfg.NewPlayer(a)
 	if err != nil {

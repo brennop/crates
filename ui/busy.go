@@ -10,7 +10,8 @@ import (
 )
 
 // The Library has one spinner for whatever it is waiting on: a library
-// scan that has files to read, or the playlist dialog loading. It ticks only
+// scan that has files to read, the playlist dialog loading, or analysis
+// jobs running. It ticks only
 // while one of those is in progress.
 
 func newSpinner() spinner.Model {
@@ -19,7 +20,7 @@ func newSpinner() spinner.Model {
 
 // busy reports whether anything the spinner shows is in progress.
 func (m *Library) busy() bool {
-	return m.scanning() || (m.dialog != nil && m.dialog.loading)
+	return m.scanning() || (m.dialog != nil && m.dialog.loading) || m.analysis.pending()
 }
 
 // scanning reports whether a scan is reading files. A sweep that finds
