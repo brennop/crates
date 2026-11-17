@@ -124,7 +124,7 @@ The `library` package owns the only copy of the index and is its only writer. Ev
 - **Index.** In memory: `map[TrackID]Track` plus `path -> TrackID`, behind one `RWMutex`. Queries return copies or ID slices. New IDs come from a counter that starts at the cache's highest ID plus one.
 - **Cache.** One SQLite file through a pure-Go driver (no cgo). Each row is keyed by `TrackID`, has a unique path, and holds size, mtime, summary tags and duration. Promote updates the row's path. It is disposable: delete it or bump the schema version and the next start does a full scan.
 - **Startup.** Load the cache, emit `LibraryLoaded` so the list shows at once, then scan in the background and correct it.
-- **Scan.** `os.ReadDir` plus `stat` per root: non-recursive for the flat master dir, recursive for inboxes. Re-read tags only where size or mtime changed, with a worker pool. Skip dotfiles, temp files and anything that is not `.mp3`. Emit changes in batches.
+- **Scan.** `os.ReadDir` plus `stat` per root: non-recursive for the flat master dir, recursive for inboxes. Re-read tags only where size or mtime changed, with a worker pool. Skip dotfiles, temp files and anything that is not `.mp3`. In master, also skip zero-byte files (a crashed move's placeholder; see Promote) and report each one once. Emit changes in batches.
 - **Path normalization.** One function, in `pathnorm`, used everywhere: absolute, symlinks resolved, Unicode NFC. Compare case-insensitively on a case-insensitive volume. Paths coming back from Music go through the same function.
 - **Watching = polling.** A `Watcher` interface with one implementation to start: a timed `ReadDir` + `stat` sweep. Inboxes sweep every 3 s; master sweeps on startup, on terminal focus and on a manual refresh key. fsnotify is avoided on macOS because its kqueue backend holds one open descriptor per file in a watched directory ([fsnotify source](https://fuchsia.googlesource.com/third_party/github.com/fsnotify/fsnotify/+/refs/tags/v1.6.0/backend_kqueue.go)).
 - **Partial downloads.** Ignore `.part` and `.crdownload`, and index an inbox file only after its size is unchanged across two sweeps.
@@ -190,7 +190,7 @@ Every operation that touches more than one package lives in `app`, runs off the 
 
 1. Check `required_tags`. Fail with the list of missing ones.
 2. Look the file's current name up among master tracks, case-insensitively. On a hit, return `ErrCollision` carrying the existing `TrackID`.
-3. Move without clobbering. Claim the name first with `os.OpenFile(dst, O_CREATE|O_EXCL)`, which fails if the name exists, then `os.Rename(src, dst)` over that empty placeholder. A bare `os.Rename` would silently replace an existing file. Other volume: copy to a dot-prefixed temp file in master, `fsync`, then claim and rename the same way and remove the source.
+3. Move without clobbering. Claim the name first with `os.OpenFile(dst, O_CREATE|O_EXCL)`, which fails if the name exists, then `os.Rename(src, dst)` over that empty placeholder. A bare `os.Rename` would silently replace an existing file. Other volume: copy to a dot-prefixed temp file in master, `fsync`, then claim and rename the same way and remove the source. A crash between the claim and the rename leaves an empty file under the real name. The app cannot tell it from a user's file, so it never deletes it; the library does not index zero-byte files in master and reports them instead (see Library).
 4. Update path and role in the index and cache under the same `TrackID`. Emit `TracksChanged`.
 5. Hand the track to the reconciler, which adds it to Music.
 
@@ -233,15 +233,20 @@ Runs after each Music snapshot and each master sweep, and only with a snapshot n
 
 - **`MusicID`s come from the snapshot.** The cache does not store them; each pass attaches them by path, and clears one whose entry is gone from Music. Refresh and focus sweep master first and read the snapshot second, so the snapshot is the newer one.
 - **Master track with no `MusicID`:** `add`, verify the location, store the ID.
+- **Promoted tracks go first.** Promote hands its track to the reconciler, which adds it at once, without waiting for a snapshot newer than the sweep. This is safe because `add` is idempotent; the snapshot rule only guards the bulk match of master against Music.
 - **Music entry inside master whose file is missing:** emit `DeadEntry`. Never auto-delete.
-- **Safety valve:** if one pass wants to add more than 100 tracks, emit `ImportPending` with the count and wait for `ConfirmImport` or `CancelImport`. A path-matching bug would otherwise look like "nothing is in Music" and trigger a mass add. The first run on an existing master dir trips the valve by design, and the user confirms the import once.
+- **Safety valve:** if one pass wants to add more than 100 tracks, emit `ImportPending` with the count and wait for `ConfirmImport` or `CancelImport`. `PendingImport` returns the waiting count, so the UI can redraw the prompt at any time. A path-matching bug would otherwise look like "nothing is in Music" and trigger a mass add. The first run on an existing master dir trips the valve by design, and the user confirms the import once.
+
+### Shutdown
+
+One path closes everything, in order: stop handling events and the reconciler, stop mpv and remove its socket dir and pidfile, kill any osascript or kid3-cli call in flight, remove kid3's private config, then flush and close the cache.
 
 ## Feeding the UI
 
 The core knows nothing about Bubble Tea. It exposes methods and one event channel, and `ui` adapts both. The Bubble Tea model, layout, keys and everything the user sees are written by the developer; this design stops at the API.
 
 - **Requests.** `ui` exports one function per `app` method that returns a `tea.Cmd`. Its message is a result type named after the method (`PromoteResult`, `DeleteResult`, …) holding the return values and the error. `Update` never blocks and never touches files.
-- **Errors.** Typed, in `model`, so the UI can match them with `errors.As`: `ErrCollision`, `ErrMissingTags`, `ErrPlaylistsLost`, `ErrBackupKept`, `ErrMusicUnavailable`, `ErrAutomationDenied`, `ErrCopySettingOn`, `ErrVerifyFailed`, `ErrNotEditable`, `ErrNotInMusic`, `ErrKid3Missing`.
+- **Errors.** Typed, in `model`, so the UI can match them with `errors.As`: `ErrCollision`, `ErrMissingTags`, `ErrPlaylistsLost`, `ErrBackupKept`, `ErrMusicUnavailable`, `ErrAutomationDenied`, `ErrCopySettingOn`, `ErrVerifyFailed`, `ErrNotEditable`, `ErrNotInMusic`, `ErrKid3Missing`, `ErrNotInbox` (promote or overwrite on a track that is not in an inbox).
 - **Events.** Packages publish to `events.Bus` through a `Sink` interface. `ui.WaitForEvent` returns the next event as a message; the model's `Update` returns it again to re-arm it.
 - **Two delivery classes.** State events (`PlayerState`, `ScanProgress`, `MusicStatus`) are latest-wins: one slot per kind, overwritten while the UI is behind. Change events (`TracksChanged`, `TrackRemoved`, `PlaylistsChanged`, `DeadEntry`, `ImportPending`, errors) are queued and never dropped. A slow UI cannot block mpv's reader or the scanner.
 - **Batches.** `TracksChanged` carries a slice of `Track` values, coalesced during scans so the UI gets a few events a second, not one per file.
