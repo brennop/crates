@@ -70,8 +70,8 @@ func TestScrolloff(t *testing.T) {
 	at(t, m, "5 up from the end", 34, 30)
 	press(t, m, "k", 1)
 	at(t, m, "6 up from the end", 33, 29)
-	press(t, m, "g", 1)
-	at(t, m, "g", 0, 0)
+	press(t, m, "g", 2)
+	at(t, m, "gg", 0, 0)
 
 	// A page down moves the view and the cursor together.
 	press(t, m, "j", 5)
@@ -128,7 +128,7 @@ func TestZZCenters(t *testing.T) {
 	at(t, m, "zz", 8, 3)
 
 	// The view stays on the rows at the ends.
-	press(t, m, "g", 1)
+	press(t, m, "g", 2)
 	press(t, m, "j", 2)
 	press(t, m, "z", 2)
 	at(t, m, "zz near the top", 2, 0)

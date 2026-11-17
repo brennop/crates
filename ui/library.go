@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	binding "charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -33,6 +34,7 @@ type Library struct {
 	cursor   int           // index into tracks of the selected row
 	top      int           // index into tracks of the first row on screen
 	zPending bool          // z was pressed; zz centers the cursor
+	gPending bool          // g was pressed; gg goes to the top, ge edits the genre
 	gen      uint64        // latest library load; older results are dropped
 
 	playSeq   uint64        // bumped on every cursor move; only the latest tick plays
@@ -46,6 +48,8 @@ type Library struct {
 
 	search     *searchPrompt // the / prompt; nil when closed
 	lastSearch string        // the pattern n and N repeat
+
+	edit *editPrompt // the tag edit in the status line; nil when closed
 
 	confirm     *deleteConfirm // nil when closed
 	deleteMode  fsops.Mode     // delete_mode, for the confirm text
@@ -103,6 +107,8 @@ func New(ctx context.Context, a *app.App, bus *events.Bus) tea.Model {
 		table.WithFocused(true),
 		table.WithStyles(tableStyles()),
 	)
+	// g is a prefix (gg, ge), so a lone g must not go to the top.
+	t.KeyMap.GotoTop = binding.NewBinding(binding.WithKeys("home"))
 	return &Library{
 		ctx: ctx, app: a, bus: bus, table: t, cols: cols, sortBy: defaultSort,
 		deleteMode: a.Capabilities().DeleteMode,
@@ -137,6 +143,7 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.SetWidth(msg.Width)
 		m.table.SetHeight(max(msg.Height-2, 3)) // title line and status line
 		m.setCursor(m.cursor)                   // cells are padded to the column widths
+		m.sizeEdit()
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -165,6 +172,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.search != nil {
 			return m, m.searchKey(msg)
 		}
+		if m.edit != nil {
+			return m, m.editKey(msg)
+		}
 		if m.zPending {
 			m.zPending = false
 			if msg.String() == "z" {
@@ -172,9 +182,32 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.gPending {
+			m.gPending = false
+			switch msg.String() {
+			case "g":
+				m.setCursor(0)
+				return m, m.selectionMoved()
+			case "e":
+				m.openEdit(editGenre)
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "z":
 			m.zPending = true
+			return m, nil
+		case "g":
+			m.gPending = true
+			return m, nil
+		case "t":
+			m.openEdit(editTitle)
+			return m, nil
+		case "a":
+			m.openEdit(editArtist)
+			return m, nil
+		case "c":
+			m.openEdit(editComment)
 			return m, nil
 		case "q":
 			return m, tea.Quit
@@ -204,6 +237,12 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.moveKey(msg) {
 			return m, m.selectionMoved()
+		}
+		return m, nil
+
+	case tea.PasteMsg:
+		if m.edit != nil {
+			return m, m.editUpdate(msg)
 		}
 		return m, nil
 
@@ -253,6 +292,14 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case DeleteResult:
 		m.deleted(msg.Summary)
 		return m, nil
+	case WriteTagsResult:
+		// The new value shows up through the TracksChanged reload.
+		if msg.Err != nil {
+			m.status = "edit: " + msg.Err.Error()
+		} else {
+			m.status = ""
+		}
+		return m, nil
 	case TogglePauseResult:
 		if msg.Err != nil {
 			m.status = "pause: " + msg.Err.Error()
@@ -261,6 +308,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case events.Event:
 		return m, tea.Batch(m.handleEvent(msg), WaitForEvent(m.bus))
+	}
+	if m.edit != nil {
+		return m, m.editUpdate(msg) // the input's own messages, such as a ctrl+v paste
 	}
 	return m, nil
 }
@@ -439,14 +489,17 @@ func (m *Library) View() tea.View {
 
 func (m *Library) statusLine() string {
 	if m.search != nil {
-		return lipgloss.NewStyle().Padding(0, 1).Width(m.width).MaxWidth(m.width).Render("/" + m.search.query + "█")
+		return promptLine("/"+m.search.query+"█", m.width)
+	}
+	if m.edit != nil {
+		return lipgloss.NewStyle().Padding(0, 1).Width(m.width).MaxWidth(m.width).Render(m.edit.input.View())
 	}
 	if m.status != "" {
 		return errorStyle.Width(m.width).MaxWidth(m.width).Render(m.status)
 	}
 	p := m.player
 	if p.Idle || p.TrackID == 0 {
-		return statusStyle.Render("stopped · space pause · / search · s sort · p playlists · x delete · q quit")
+		return statusStyle.Render("stopped · space pause · / search · c/a/t/ge edit · s sort · p playlists · x delete · q quit")
 	}
 	name := baseName(p.Path)
 	for _, t := range m.tracks {
@@ -461,6 +514,15 @@ func (m *Library) statusLine() string {
 	}
 	line := fmt.Sprintf("%s %s  %s / %s", state, name, clock(p.Position), clock(p.Duration))
 	return statusStyle.Width(m.width).MaxWidth(m.width).Render(line)
+}
+
+// promptLine renders a status-line prompt. A line too long for the screen
+// loses its head, so the cursor at the end stays in view.
+func promptLine(s string, width int) string {
+	if w := width - 2; w > 0 && ansi.StringWidth(s) > w {
+		s = "…" + ansi.TruncateLeft(s, ansi.StringWidth(s)-w+1, "")
+	}
+	return lipgloss.NewStyle().Padding(0, 1).Width(width).MaxWidth(width).Render(s)
 }
 
 // Column indexes.
