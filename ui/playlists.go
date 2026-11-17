@@ -39,17 +39,9 @@ type playlistDialogLoaded struct {
 }
 
 func newPlaylistDialog(t model.Track) *playlistDialog {
-	title := t.Summary.Title
-	if title == "" {
-		title = baseName(t.Path)
-	}
-	name := title
-	if t.Summary.Artist != "" {
-		name = t.Summary.Artist + " – " + title
-	}
 	return &playlistDialog{
 		id:      t.ID,
-		name:    name,
+		name:    trackName(t),
 		loading: true,
 		member:  map[string]bool{},
 		busy:    map[string]bool{},

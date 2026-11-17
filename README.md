@@ -26,6 +26,8 @@ The Library view is a table of the master tracks: title, artist, genre, key, BPM
 
 `p` opens the playlists of the selected track: Music's editable playlists, each with a checkbox. Move with `↑`/`↓` (or `j`/`k`, `g`/`G`), and `space` or `enter` adds the track to the playlist under the cursor, or removes it. `esc`, `p` or `q` closes the dialog. Smart playlists and folders are not listed, and a track that is not in Music yet has no playlists to edit.
 
+`x` deletes the selected track after asking: `y` (or `enter`) confirms, `n` or `esc` cancels. `X` deletes it without asking. Deleting removes the track from Music, then moves the file to the Trash or removes it for good, per `delete_mode`. The cursor moves on to the next row.
+
 ## Apple Music settings
 
 The master folder must live in the Music library as plain file references, never as copies. Before the first run:

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -158,5 +159,98 @@ func TestLibrarySortCycles(t *testing.T) {
 	}
 	if m.sortBy != defaultSort {
 		t.Fatalf("cycle ended on %d, want back at artist", m.sortBy)
+	}
+}
+
+// reload loads the library and feeds the result to m.
+func reload(t *testing.T, m *Library) {
+	t.Helper()
+	loaded, ok := find[libraryLoaded](exec(m.load()))
+	if !ok {
+		t.Fatal("load returned no libraryLoaded")
+	}
+	feed(t, m, loaded)
+}
+
+func exists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
+}
+
+func TestLibraryDeleteCancel(t *testing.T) {
+	e := newEnv(t)
+	a := e.file(e.master, "a.mp3")
+	m := libraryWith(t, e)
+
+	if msgs := feed(t, m, key("x")); len(msgs) != 0 || m.confirm == nil {
+		t.Fatalf("x: msgs %v, confirm %v", msgs, m.confirm)
+	}
+	if !strings.Contains(m.View().Content, "Delete ·") {
+		t.Error("view lacks the confirm dialog")
+	}
+	feed(t, m, key("z")) // ignored
+	if m.confirm == nil {
+		t.Fatal("an unbound key closed the dialog")
+	}
+	if _, ok := find[DeleteResult](feed(t, m, key("n"))); ok {
+		t.Fatal("n deleted")
+	}
+	if m.confirm != nil || !exists(a.Path) {
+		t.Fatalf("after n: confirm %v, file there %t", m.confirm, exists(a.Path))
+	}
+}
+
+func TestLibraryDeleteConfirm(t *testing.T) {
+	e := newEnv(t)
+	a := e.file(e.master, "a.mp3")
+	m := libraryWith(t, e)
+
+	feed(t, m, key("x"))
+	res, ok := find[DeleteResult](feed(t, m, key("y")))
+	if !ok || !slices.Equal(res.Summary.Deleted, []model.TrackID{a.ID}) {
+		t.Fatalf("y: %+v, %v", res, ok)
+	}
+	if m.confirm != nil || exists(a.Path) {
+		t.Fatalf("after y: confirm %v, file there %t", m.confirm, exists(a.Path))
+	}
+}
+
+func TestLibraryDeleteWithoutAsking(t *testing.T) {
+	e := newEnv(t)
+	a := e.file(e.master, "a.mp3")
+	m := libraryWith(t, e)
+
+	res, ok := find[DeleteResult](feed(t, m, key("X")))
+	if !ok || !slices.Equal(res.Summary.Deleted, []model.TrackID{a.ID}) || m.confirm != nil {
+		t.Fatalf("X: %+v, %v, confirm %v", res, ok, m.confirm)
+	}
+	if exists(a.Path) {
+		t.Fatal("file still there")
+	}
+}
+
+func TestLibraryDeleteKeepsRow(t *testing.T) {
+	e := newEnv(t)
+	for _, n := range []string{"a.mp3", "b.mp3", "c.mp3"} {
+		e.file(e.master, n)
+	}
+	m := libraryWith(t, e)
+	feed(t, m, tea.KeyPressMsg{Code: tea.KeyDown})
+	next := m.tracks[2].ID
+
+	res, _ := find[DeleteResult](feed(t, m, key("X")))
+	m.Update(res)
+	reload(t, m)
+	if len(m.tracks) != 2 || m.table.Cursor() != 1 || m.selected() != next {
+		t.Fatalf("after delete: %d rows, cursor %d on %d, want row 1 on %d",
+			len(m.tracks), m.table.Cursor(), m.selected(), next)
+	}
+
+	// Deleting the last row lands on the new last row.
+	res, _ = find[DeleteResult](feed(t, m, key("X")))
+	m.Update(res)
+	reload(t, m)
+	if len(m.tracks) != 1 || m.table.Cursor() != 0 {
+		t.Fatalf("after deleting the last row: %d rows, cursor %d", len(m.tracks), m.table.Cursor())
 	}
 }

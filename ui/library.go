@@ -13,6 +13,7 @@ import (
 
 	"github.com/brennop/crates/app"
 	"github.com/brennop/crates/events"
+	"github.com/brennop/crates/fsops"
 	"github.com/brennop/crates/model"
 )
 
@@ -40,8 +41,18 @@ type Library struct {
 
 	dialog *playlistDialog // nil when closed
 
+	confirm     *deleteConfirm // nil when closed
+	deleteMode  fsops.Mode     // delete_mode, for the confirm text
+	afterDelete deletedRow     // where the cursor goes once the deleted row is gone
+
 	width, height int
 	cols          []table.Column // current widths, so row can fill its cells
+}
+
+// deletedRow is the last track deleted from the table and the row it was on.
+type deletedRow struct {
+	id  model.TrackID
+	row int
 }
 
 // sortOrder is one step of the s key's cycle: the field Query sorts on and
@@ -86,7 +97,10 @@ func New(ctx context.Context, a *app.App, bus *events.Bus) tea.Model {
 		table.WithFocused(true),
 		table.WithStyles(tableStyles()),
 	)
-	return &Library{ctx: ctx, app: a, bus: bus, table: t, cols: cols, sortBy: defaultSort}
+	return &Library{
+		ctx: ctx, app: a, bus: bus, table: t, cols: cols, sortBy: defaultSort,
+		deleteMode: a.Capabilities().DeleteMode,
+	}
 }
 
 func (m *Library) Init() tea.Cmd {
@@ -130,11 +144,30 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, cmd
 		}
+		if m.confirm != nil {
+			closed, ok := m.confirm.update(msg)
+			if !closed {
+				return m, nil
+			}
+			id := m.confirm.id
+			m.confirm = nil
+			if !ok {
+				return m, nil
+			}
+			return m, m.delete(id)
+		}
 		switch msg.String() {
 		case "q":
 			return m, tea.Quit
 		case "p":
 			return m, m.openDialog()
+		case "x":
+			if i := m.table.Cursor(); i >= 0 && i < len(m.tracks) {
+				m.confirm = newDeleteConfirm(m.tracks[i])
+			}
+			return m, nil
+		case "X":
+			return m, m.delete(m.selected())
 		case "space":
 			return m, TogglePause(m.ctx, m.app)
 		case "s":
@@ -192,6 +225,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case RemoveFromPlaylistResult:
 		m.playlistWritten(msg.IDs, msg.PlaylistID, false, msg.Err)
 		return m, nil
+	case DeleteResult:
+		m.deleted(msg.Summary)
+		return m, nil
 	case TogglePauseResult:
 		if msg.Err != nil {
 			m.status = "pause: " + msg.Err.Error()
@@ -241,6 +277,34 @@ func (m *Library) openDialog() tea.Cmd {
 	return m.dialog.load(m.app)
 }
 
+// delete deletes track id, remembering its row so the cursor stays there
+// (on the following track) after the reload.
+func (m *Library) delete(id model.TrackID) tea.Cmd {
+	if id == 0 {
+		return nil
+	}
+	for i, t := range m.tracks {
+		if t.ID == id {
+			m.afterDelete = deletedRow{id: id, row: i}
+			break
+		}
+	}
+	return Delete(m.ctx, m.app, []model.TrackID{id})
+}
+
+// deleted reports a delete's failures in the status line. The row itself
+// goes away through the TrackRemoved event's reload.
+func (m *Library) deleted(sum app.DeleteSummary) {
+	switch n := len(sum.Failures); {
+	case n == 0:
+		m.status = ""
+	case n == 1:
+		m.status = "delete: " + sum.Failures[0].Err.Error()
+	default:
+		m.status = fmt.Sprintf("delete: %d tracks failed: %s", n, sum.Failures[0].Err.Error())
+	}
+}
+
 // playlistWritten routes a playlist write's result to the dialog, or to
 // the status line when the dialog was not waiting on it.
 func (m *Library) playlistWritten(ids []model.TrackID, pid string, add bool, err error) {
@@ -257,12 +321,15 @@ func (m *Library) playlistWritten(ids []model.TrackID, pid string, add bool, err
 func (m *Library) setTracks(ts []model.Track) tea.Cmd {
 	keep := m.selected()
 	m.tracks = ts
-	cursor := 0
+	cursor, found := 0, false
 	for i, t := range ts {
 		if t.ID == keep {
-			cursor = i
+			cursor, found = i, true
 			break
 		}
+	}
+	if !found && keep != 0 && keep == m.afterDelete.id {
+		cursor = max(min(m.afterDelete.row, len(ts)-1), 0)
 	}
 	m.refreshRows(cursor)
 	if len(ts) > 0 {
@@ -364,6 +431,9 @@ func (m *Library) View() tea.View {
 	if m.dialog != nil {
 		content = overlay(content, m.dialog.view(m.width, m.height), m.width, m.height)
 	}
+	if m.confirm != nil {
+		content = overlay(content, m.confirm.view(m.width, m.deleteMode), m.width, m.height)
+	}
 	v := tea.NewView(content)
 	v.AltScreen = true
 	v.WindowTitle = "crates"
@@ -376,7 +446,7 @@ func (m *Library) statusLine() string {
 	}
 	p := m.player
 	if p.Idle || p.TrackID == 0 {
-		return statusStyle.Render("stopped · space pause · s sort · p playlists · q quit")
+		return statusStyle.Render("stopped · space pause · s sort · p playlists · x delete · q quit")
 	}
 	name := baseName(p.Path)
 	for _, t := range m.tracks {
