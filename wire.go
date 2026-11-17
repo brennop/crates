@@ -47,6 +47,9 @@ type options struct {
 	PidFile   string        // mpv's pidfile
 	MPVArgs   []string      // extra mpv arguments (tests pass --ao=null)
 	Music     music.Service // nil: built from the config
+	// BeatportTokenFile is the Beatport token the analysis panel refreshes
+	// and saves; "" leaves only $BEATPORT_TOKEN.
+	BeatportTokenFile string
 }
 
 // defaultOptions puts the cache and the pidfile in the user cache dir:
@@ -60,7 +63,11 @@ func defaultOptions() (options, error) {
 	if err != nil {
 		return options{}, err
 	}
-	return options{CachePath: filepath.Join(dir, "crates", "library.db"), PidFile: pid}, nil
+	bp, err := config.BeatportTokenPath()
+	if err != nil {
+		return options{}, err
+	}
+	return options{CachePath: filepath.Join(dir, "crates", "library.db"), PidFile: pid, BeatportTokenFile: bp}, nil
 }
 
 // build tidies master, builds every piece, wires them to one bus and starts
@@ -117,7 +124,7 @@ func build(cfg config.Config, o options) (*app.App, *events.Bus, error) {
 		},
 		Bus:      bus,
 		Settings: cfg,
-		Analyzer: analysis.New(analysis.Options{BeatportToken: os.Getenv("BEATPORT_TOKEN")}),
+		Analyzer: analysis.New(analysis.Options{BeatportToken: os.Getenv("BEATPORT_TOKEN"), BeatportTokenFile: o.BeatportTokenFile}),
 	})
 	if err != nil {
 		return nil, nil, err // New closed the pieces

@@ -43,31 +43,32 @@ func (t bpTrack) String() string {
 // else the first result.
 func (a *Analyzer) beatport(ctx context.Context, t Track) Result {
 	r := Result{Job: Beatport}
-	if a.opts.BeatportToken == "" {
-		r.Err = ErrNoBeatportToken
-		return r
-	}
 	q := strings.TrimSpace(t.Artist + " " + t.Title)
-	if q == "" {
-		r.Err = fmt.Errorf("track has no artist or title to search for")
-		return r
-	}
-	u := a.api + "/catalog/search/?" + url.Values{"q": {q}, "type": {"tracks"}, "per_page": {"10"}}.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	tok, err := a.beatportToken(ctx, false)
 	if err != nil {
 		r.Err = err
 		return r
 	}
-	req.Header.Set("Authorization", "Bearer "+a.opts.BeatportToken)
-	req.Header.Set("Accept", "application/json")
-	resp, err := a.client.Do(req)
+	if q == "" {
+		r.Err = fmt.Errorf("track has no artist or title to search for")
+		return r
+	}
+	resp, err := a.search(ctx, tok, q)
+	if err == nil && refused(resp) && a.opts.BeatportToken == "" {
+		// The stored token may have been revoked before it expired:
+		// refresh it once and try again.
+		resp.Body.Close()
+		if tok, err = a.beatportToken(ctx, true); err == nil {
+			resp, err = a.search(ctx, tok, q)
+		}
+	}
 	if err != nil {
 		r.Err = err
 		return r
 	}
 	defer resp.Body.Close()
 	switch {
-	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+	case refused(resp):
 		r.Err = fmt.Errorf("Beatport refused the token (%s): get a fresh one", resp.Status)
 		return r
 	case resp.StatusCode != http.StatusOK:
@@ -91,6 +92,22 @@ func (a *Analyzer) beatport(ctx context.Context, t Track) Result {
 		r.Keys = []KeyGuess{{Key: m.Key.Name}}
 	}
 	return r
+}
+
+// search runs one catalog search for q with tok.
+func (a *Analyzer) search(ctx context.Context, tok, q string) (*http.Response, error) {
+	u := a.api + "/catalog/search/?" + url.Values{"q": {q}, "type": {"tracks"}, "per_page": {"10"}}.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Accept", "application/json")
+	return a.client.Do(req)
+}
+
+func refused(resp *http.Response) bool {
+	return resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden
 }
 
 func bestMatch(ts []bpTrack, artist string) (bpTrack, bool) {

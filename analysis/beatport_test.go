@@ -2,10 +2,16 @@ package analysis
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestBeatportPicksArtistMatch(t *testing.T) {
@@ -44,5 +50,68 @@ func TestBeatportNeedsToken(t *testing.T) {
 	r := New(Options{}).Run(context.Background(), Beatport, Track{Artist: "x"})
 	if !errors.Is(r.Err, ErrNoBeatportToken) {
 		t.Fatalf("err = %v", r.Err)
+	}
+}
+
+// A stored token past its expiry is refreshed with its refresh token and the
+// client named in the JWT, the new pair is saved, and a refused token is
+// refreshed once more and retried.
+func TestBeatportRefreshesStoredToken(t *testing.T) {
+	jwt := "h." + base64.RawURLEncoding.EncodeToString([]byte(`{"client_id":"cid"}`)) + ".s"
+	valid, refreshes := "", 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/auth/o/token/" {
+			r.ParseForm()
+			want := fmt.Sprintf("rt%d", refreshes)
+			if r.Form.Get("grant_type") != "refresh_token" || r.Form.Get("refresh_token") != want || r.Form.Get("client_id") != "cid" {
+				t.Errorf("refresh form %v, want refresh_token %s", r.Form, want)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			refreshes++
+			valid = fmt.Sprintf("at%d", refreshes)
+			fmt.Fprintf(w, `{"access_token":%q,"refresh_token":"rt%d","expires_in":600}`, valid, refreshes)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer "+valid {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Write([]byte(`{"tracks":[{"name":"T","bpm":120,"artists":[{"name":"A"}]}]}`))
+	}))
+	defer srv.Close()
+
+	path := filepath.Join(t.TempDir(), "beatport.json")
+	os.WriteFile(path, []byte(`{"access_token":"`+jwt+`","refresh_token":"rt0","expires_in":600}`), 0o600)
+	a := New(Options{BeatportTokenFile: path})
+	a.api = srv.URL
+	run := func() {
+		t.Helper()
+		if r := a.Run(context.Background(), Beatport, Track{Artist: "A", Title: "T"}); r.Err != nil || r.BPM != 120 {
+			t.Fatalf("result %+v", r)
+		}
+	}
+	saved := func() bpToken {
+		var tok bpToken
+		data, _ := os.ReadFile(path)
+		json.Unmarshal(data, &tok)
+		return tok
+	}
+
+	run() // no expires_at: refreshes first
+	if tok := saved(); refreshes != 1 || tok.AccessToken != "at1" || tok.RefreshToken != "rt1" || tok.ClientID != "cid" || tok.ExpiresAt < time.Now().Unix()+500 {
+		t.Fatalf("after first run: %d refreshes, saved %+v", refreshes, tok)
+	}
+	run() // still valid: no refresh
+	if refreshes != 1 {
+		t.Fatalf("refreshed a valid token")
+	}
+	valid = "revoked"
+	run() // refused: refresh once and retry
+	if tok := saved(); refreshes != 2 || tok.RefreshToken != "rt2" {
+		t.Fatalf("after a refusal: %d refreshes, saved %+v", refreshes, tok)
+	}
+	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o600 {
+		t.Fatalf("token file mode %v", fi.Mode())
 	}
 }

@@ -74,6 +74,16 @@ func TagsPath() (string, error) {
 	return filepath.Join(filepath.Dir(p), "TAGS.md"), nil
 }
 
+// BeatportTokenPath returns the Beatport token file: beatport.json beside
+// the config file.
+func BeatportTokenPath() (string, error) {
+	p, err := Path()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(p), "beatport.json"), nil
+}
+
 // Load reads, validates and normalizes the config file at path.
 func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)
