@@ -140,6 +140,7 @@ List columns come from a fast native reader. The tag editor reads and writes thr
 - **Write.** One kid3-cli invocation per edit, one `-c` per changed frame; kid3 runs them in order and saves at the end. Check the exit status and the JSON `error` object, and wrap the call in a context timeout.
 - **Same value on many files.** One call with all the paths; kid3 selects them and applies the command to the selection.
 - **After a write.** Re-read the summary natively, `Upsert`, and if the track has a `MusicID`, ask Music to `refresh` it.
+- **kid3-cli quirks** ([docs/kid3-cli.md](docs/kid3-cli.md)). Frame names follow the macOS UI language, so every call points `KID3_CONFIG_FILE` at a private config with English set. A missing path or an NFD-spelled path makes kid3 skip the commands and still exit 0, so paths are checked and passed as NFC, and the answers are counted.
 - **Editing the playing track.** kid3 may rewrite the file under mpv. Allow it; if mpv then reports an error, reload the track at the saved position.
 
 ```go
