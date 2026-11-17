@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"path/filepath"
 	"strings"
 	"unicode"
 
@@ -46,7 +47,7 @@ func matches(t model.Track, pat string) bool {
 	s := t.Summary
 	title := s.Title
 	if title == "" {
-		title = baseName(t.Path)
+		title = filepath.Base(t.Path)
 	}
 	key := s.Key
 	if c, ok := model.ParseCamelot(key); ok {

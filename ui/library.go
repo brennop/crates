@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -450,7 +451,7 @@ func (m *Library) row(t model.Track, selected bool) table.Row {
 	s := t.Summary
 	title := s.Title
 	if title == "" {
-		title = baseName(t.Path)
+		title = filepath.Base(t.Path)
 	}
 	mark := "  "
 	if t.ID == m.player.TrackID && !m.player.Idle {
@@ -517,7 +518,7 @@ func (m *Library) statusLine() string {
 		const lead = "stopped · "
 		return statusStyle.Render(lead + hints(m.width-2-len(lead), libraryHints()...))
 	}
-	name := baseName(p.Path)
+	name := filepath.Base(p.Path)
 	for _, t := range m.tracks {
 		if t.ID == p.TrackID {
 			name = t.Summary.Artist + " – " + t.Summary.Title
@@ -606,13 +607,6 @@ func clock(d time.Duration) string {
 		return fmt.Sprintf("%d:%02d:%02d", s/3600, s/60%60, s%60)
 	}
 	return fmt.Sprintf("%d:%02d", s/60, s%60)
-}
-
-func baseName(p string) string {
-	if i := strings.LastIndexByte(p, '/'); i >= 0 {
-		return p[i+1:]
-	}
-	return p
 }
 
 // oneLine folds a multi-line comment onto one row.

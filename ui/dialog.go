@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"path/filepath"
 	"strings"
 
 	binding "charm.land/bubbles/v2/key"
@@ -65,7 +66,7 @@ func overlay(base, box string, width, height int) string {
 func trackName(t model.Track) string {
 	title := t.Summary.Title
 	if title == "" {
-		title = baseName(t.Path)
+		title = filepath.Base(t.Path)
 	}
 	if t.Summary.Artist != "" {
 		return t.Summary.Artist + " – " + title
