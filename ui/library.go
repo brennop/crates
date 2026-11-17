@@ -279,7 +279,11 @@ func (m *Library) row(t model.Track, selected bool) table.Row {
 		}
 	}
 	bpm, _ := s.Field(model.FieldBPM)
-	row := table.Row{mark + title, s.Artist, s.Genre, s.Key, bpm, clock(t.Duration), oneLine(s.Comment)}
+	key := s.Key
+	if c, ok := model.ParseCamelot(key); ok {
+		key = c.String()
+	}
+	row := table.Row{mark + title, s.Artist, s.Genre, key, bpm, clock(t.Duration), oneLine(s.Comment)}
 	for i := range row {
 		w := 0
 		if i < len(m.cols) {

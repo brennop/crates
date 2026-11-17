@@ -20,7 +20,8 @@ type Filter struct {
 
 // Sort orders the result by one column. Field is a summary field name
 // (model.SummaryFields), or one of "path", "size", "mtime", "duration",
-// "role". "" sorts by ID. Ties fall back to ID ascending.
+// "role". "" sorts by ID. Ties fall back to ID ascending. Keys sort around
+// the Camelot wheel (model.CompareKeys).
 type Sort struct {
 	Field string
 	Desc  bool
@@ -95,6 +96,8 @@ func comparator(field string) (func(a, b *model.Track) int, error) {
 		return func(a, b *model.Track) int { return cmp.Compare(a.Summary.Year, b.Summary.Year) }, nil
 	case model.FieldBPM:
 		return func(a, b *model.Track) int { return cmp.Compare(a.Summary.BPM, b.Summary.BPM) }, nil
+	case model.FieldKey:
+		return func(a, b *model.Track) int { return model.CompareKeys(a.Summary.Key, b.Summary.Key) }, nil
 	}
 	if !model.IsSummaryField(field) {
 		return nil, fmt.Errorf("library: cannot sort by %q", field)

@@ -15,9 +15,10 @@ func queryLibrary(t testing.TB) *Library {
 	t.Helper()
 	x := testIndex(true)
 	l := &Library{idx: x}
-	add := func(path, title, artist string, n int, role model.Role) {
+	add := func(path, title, artist, key string, n int, role model.Role) {
 		tr := track(path, title)
 		tr.Summary.Artist = artist
+		tr.Summary.Key = key
 		tr.Summary.TrackNumber = n
 		tr.Summary.Year = 2000 + n
 		tr.Duration = time.Duration(n) * time.Second
@@ -25,9 +26,9 @@ func queryLibrary(t testing.TB) *Library {
 			t.Fatal(err)
 		}
 	}
-	add("/lib/master/one.mp3", "Zebra", "The Band", 10, model.Master)
-	add("/lib/master/two.mp3", "apple", "Other", 2, model.Master)
-	add("/lib/inbox/three.mp3", "Mango", "THE BAND", 1, model.Inbox)
+	add("/lib/master/one.mp3", "Zebra", "The Band", "Am", 10, model.Master)
+	add("/lib/master/two.mp3", "apple", "Other", "3B", 2, model.Master)
+	add("/lib/inbox/three.mp3", "Mango", "THE BAND", "10A", 1, model.Inbox)
 	return l
 }
 
@@ -74,6 +75,7 @@ func TestQuerySorts(t *testing.T) {
 		{"title descending", Sort{Field: model.FieldTitle, Desc: true}, []string{"Zebra", "Mango", "apple"}},
 		{"track number numerically", Sort{Field: model.FieldTrackNumber}, []string{"Mango", "apple", "Zebra"}},
 		{"year numerically, descending", Sort{Field: model.FieldYear, Desc: true}, []string{"Zebra", "apple", "Mango"}},
+		{"key around the Camelot wheel", Sort{Field: model.FieldKey}, []string{"apple", "Zebra", "Mango"}},
 		{"duration", Sort{Field: "duration"}, []string{"Mango", "apple", "Zebra"}},
 		{"path", Sort{Field: "path"}, []string{"Mango", "Zebra", "apple"}},
 		{"role (inbox sorts first)", Sort{Field: "role"}, []string{"Mango", "Zebra", "apple"}},
