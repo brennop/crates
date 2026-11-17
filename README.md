@@ -18,7 +18,11 @@ go build -o crates ./cmd/crates
 ./crates -check
 ```
 
-`-check` reads the config, looks for mpv and kid3-cli, and reports how deleting to the Trash will work, then exits. Without it, crates starts the app. Until a UI model is set up (see `cmd/crates/ui.go`), it runs headless and logs every event to stderr. `-headless` forces that mode.
+`-check` reads the config, looks for mpv and kid3-cli, and reports how deleting to the Trash will work, then exits. Without it, crates starts the app. `-headless` runs it without the UI and logs every event to stderr.
+
+## Using it
+
+The Library view is a table of the master tracks, sorted by artist: title, artist, genre, key, BPM, length and comments. The selected track plays: move with `↑`/`↓` (or `j`/`k`, `pgup`/`pgdown`, `g`/`G`), and the row under the cursor starts once you stop on it. `space` pauses, `q` quits.
 
 ## Apple Music settings
 
