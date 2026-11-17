@@ -150,7 +150,8 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		if msg.String() == "ctrl+c" {
+		k := libraryKeys
+		if binding.Matches(msg, k.ForceQuit) {
 			return m, tea.Quit
 		}
 		if m.dialog != nil {
@@ -180,59 +181,59 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.zPending {
 			m.zPending = false
-			if msg.String() == "z" {
+			if binding.Matches(msg, k.Center) {
 				m.center()
 			}
 			return m, nil
 		}
 		if m.gPending {
 			m.gPending = false
-			switch msg.String() {
-			case "g":
+			switch {
+			case binding.Matches(msg, k.Top):
 				m.setCursor(0)
 				return m, m.selectionMoved()
-			case "e":
+			case binding.Matches(msg, k.EditGenre):
 				m.openEdit(editGenre)
 			}
 			return m, nil
 		}
-		switch msg.String() {
-		case "z":
+		switch {
+		case binding.Matches(msg, k.Center):
 			m.zPending = true
 			return m, nil
-		case "g":
+		case binding.Matches(msg, k.G):
 			m.gPending = true
 			return m, nil
-		case "t":
+		case binding.Matches(msg, k.EditTitle):
 			m.openEdit(editTitle)
 			return m, nil
-		case "a":
+		case binding.Matches(msg, k.EditArtist):
 			m.openEdit(editArtist)
 			return m, nil
-		case "c":
+		case binding.Matches(msg, k.EditComment):
 			m.openEdit(editComment)
 			return m, nil
-		case "q":
+		case binding.Matches(msg, k.Quit):
 			return m, tea.Quit
-		case "p":
+		case binding.Matches(msg, k.Playlists):
 			return m, m.openDialog()
-		case "x":
+		case binding.Matches(msg, k.Delete):
 			if i := m.cursor; i >= 0 && i < len(m.tracks) {
 				m.confirm = newDeleteConfirm(m.tracks[i])
 			}
 			return m, nil
-		case "X":
+		case binding.Matches(msg, k.DeleteNow):
 			return m, m.delete(m.selected())
-		case "space":
+		case binding.Matches(msg, k.Pause):
 			return m, TogglePause(m.ctx, m.app)
-		case "/":
+		case binding.Matches(msg, k.Search):
 			m.openSearch()
 			return m, nil
-		case "n":
+		case binding.Matches(msg, k.Next):
 			return m, m.searchNext(true)
-		case "N":
+		case binding.Matches(msg, k.Prev):
 			return m, m.searchNext(false)
-		case "s":
+		case binding.Matches(msg, k.Sort):
 			m.sortBy = (m.sortBy + 1) % len(sortOrders)
 			m.cols = columns(m.width, sortOrders[m.sortBy].col)
 			m.table.SetColumns(m.cols)
@@ -507,7 +508,8 @@ func (m *Library) statusLine() string {
 	}
 	p := m.player
 	if p.Idle || p.TrackID == 0 {
-		return statusStyle.Render("stopped · space pause · / search · c/a/t/ge edit · s sort · p playlists · x delete · q quit")
+		const lead = "stopped · "
+		return statusStyle.Render(lead + hints(m.width-2-len(lead), libraryHints()...))
 	}
 	name := baseName(p.Path)
 	for _, t := range m.tracks {

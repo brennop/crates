@@ -142,11 +142,6 @@ func (d *playlistDialog) loaded(msg playlistDialogLoaded) tea.Cmd {
 	return cmd
 }
 
-var (
-	dialogClose  = binding.NewBinding(binding.WithKeys("esc", "p", "q"), binding.WithHelp("esc", "close"))
-	dialogToggle = binding.NewBinding(binding.WithKeys("space", "enter"), binding.WithHelp("space", "toggle"))
-)
-
 // update handles a key. It reports whether the dialog should close. While
 // a filter is being typed every key goes to it, and esc clears a filter
 // before it closes the dialog.
@@ -154,9 +149,9 @@ func (d *playlistDialog) update(ctx context.Context, a *app.App, k tea.KeyPressM
 	switch {
 	case d.list.SettingFilter():
 	case d.list.IsFiltered() && binding.Matches(k, d.list.KeyMap.ClearFilter):
-	case binding.Matches(k, dialogClose):
+	case binding.Matches(k, dialogKeys.Close):
 		return true, nil
-	case binding.Matches(k, dialogToggle):
+	case binding.Matches(k, dialogKeys.Toggle):
 		return false, d.toggle(ctx, a)
 	}
 	return false, d.updateList(k)
@@ -263,8 +258,25 @@ func (d *playlistDialog) view(width, height int) string {
 	if d.err != "" {
 		lines = append(lines, dialogErrStyle.Render(fit(d.err)))
 	}
-	lines = append(lines, "", dialogHintStyle.Render(fit("space toggle · / filter · esc close")))
+	lines = append(lines, "", dialogHintStyle.Render(hints(d.inner, d.hints()...)))
 	return dialogStyle.Render(strings.Join(lines, "\n"))
+}
+
+// hints are the keys the dialog's hint line lists, which change while a
+// filter is typed or set.
+func (d *playlistDialog) hints() []binding.Binding {
+	lk := d.list.KeyMap
+	switch {
+	case d.list.SettingFilter():
+		return []binding.Binding{lk.AcceptWhileFiltering, lk.CancelWhileFiltering}
+	case d.list.IsFiltered():
+		// esc clears the filter, so name another close key.
+		clear, close := lk.ClearFilter, dialogKeys.Close
+		clear.SetHelp("esc", "clear")
+		close.SetHelp("q", "close")
+		return []binding.Binding{dialogKeys.Toggle, clear, close}
+	}
+	return []binding.Binding{dialogKeys.Toggle, lk.Filter, dialogKeys.Close}
 }
 
 // overlay draws box centered over base.

@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 
+	binding "charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -24,10 +25,10 @@ func newDeleteConfirm(t model.Track) *deleteConfirm {
 // update handles a key. It reports whether the dialog should close, and
 // whether the delete was confirmed. Other keys are ignored.
 func (d *deleteConfirm) update(k tea.KeyPressMsg) (closed, confirmed bool) {
-	switch k.String() {
-	case "y", "enter":
+	switch {
+	case binding.Matches(k, confirmKeys.Yes):
 		return true, true
-	case "n", "esc", "q", "x":
+	case binding.Matches(k, confirmKeys.No):
 		return true, false
 	}
 	return false, false
@@ -49,7 +50,7 @@ func (d *deleteConfirm) view(width int, mode fsops.Mode) string {
 		"",
 		lipgloss.NewStyle().Width(inner).Render(body),
 		"",
-		dialogHintStyle.Render(fit("y delete · n cancel")),
+		dialogHintStyle.Render(hints(inner, confirmKeys.Yes, confirmKeys.No)),
 	}
 	return dialogStyle.Render(strings.Join(lines, "\n"))
 }
