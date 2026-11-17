@@ -127,3 +127,36 @@ func TestClock(t *testing.T) {
 		}
 	}
 }
+
+func TestLibrarySortCycles(t *testing.T) {
+	e := newEnv(t)
+	e.file(e.master, "a.mp3")
+	m := New(e.ctx, e.app, e.bus).(*Library)
+	feed(t, m, tea.WindowSizeMsg{Width: 120, Height: 20})
+
+	if !strings.Contains(m.View().Content, "sorted by artist") {
+		t.Fatal("default sort is not artist")
+	}
+	for i := range sortOrders {
+		o := sortOrders[i]
+		for c, col := range m.cols {
+			if got := strings.HasSuffix(col.Title, "▲"); got != (c == o.col) {
+				t.Errorf("sort %s: column %q marked %t", o.name, col.Title, got)
+			}
+		}
+		if !strings.Contains(m.View().Content, "sorted by "+o.name) {
+			t.Errorf("view does not name sort %s", o.name)
+		}
+		loaded, ok := find[libraryLoaded](exec(m.load()))
+		if !ok || loaded.err != nil || len(loaded.tracks) != 1 {
+			t.Fatalf("sort %s: load = %+v", o.name, loaded)
+		}
+		msgs := feed(t, m, tea.KeyPressMsg{Code: 's', Text: "s"})
+		if _, ok := find[libraryLoaded](msgs); !ok {
+			t.Fatalf("s after %s did not reload", o.name)
+		}
+	}
+	if m.sortBy != 0 {
+		t.Fatalf("cycle ended on %d, want back at artist", m.sortBy)
+	}
+}

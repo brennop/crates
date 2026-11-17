@@ -22,7 +22,7 @@ go build -o crates .
 
 ## Using it
 
-The Library view is a table of the master tracks, sorted by artist: title, artist, genre, key, BPM, length and comments. The selected track plays: move with `↑`/`↓` (or `j`/`k`, `pgup`/`pgdown`, `g`/`G`), and the row under the cursor starts once you stop on it. Key and BPM cells get a background color by value: keys by their place on the Camelot wheel (a key and its relative major/minor share a color), BPM around the color wheel once every 90 BPM. `space` pauses, `q` quits.
+The Library view is a table of the master tracks: title, artist, genre, key, BPM, length and comments. It starts sorted by artist; `s` cycles the sort through artist, title, genre, key, BPM and length, and a `▲` marks the sorted column. The selected track plays: move with `↑`/`↓` (or `j`/`k`, `pgup`/`pgdown`, `g`/`G`), and the row under the cursor starts once you stop on it. Key and BPM cells get a background color by value: keys by their place on the Camelot wheel (a key and its relative major/minor share a color), BPM around the color wheel once every 90 BPM. `space` pauses, `q` quits.
 
 ## Apple Music settings
 

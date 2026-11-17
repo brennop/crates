@@ -36,8 +36,28 @@ type Library struct {
 	player    events.PlayerState
 	status    string // last error, shown in the status line
 
+	sortBy int // index into sortOrders
+
 	width, height int
 	cols          []table.Column // current widths, so row can fill its cells
+}
+
+// sortOrder is one step of the s key's cycle: the field Query sorts on and
+// the column whose header shows the marker.
+type sortOrder struct {
+	field string
+	col   int
+	name  string
+}
+
+// sortOrders is the cycle s steps through; the first is the default.
+var sortOrders = []sortOrder{
+	{model.FieldArtist, colArtist, "artist"},
+	{model.FieldTitle, colTitle, "title"},
+	{model.FieldGenre, colGenre, "genre"},
+	{model.FieldKey, colKey, "key"},
+	{model.FieldBPM, colBPM, "BPM"},
+	{"duration", colLength, "length"},
 }
 
 // libraryLoaded carries a query and the tracks it named, read together.
@@ -55,7 +75,7 @@ type playTick struct {
 
 // New builds the model. Its signature matches the newUI hook in the root package.
 func New(ctx context.Context, a *app.App, bus *events.Bus) tea.Model {
-	cols := columns(100)
+	cols := columns(100, 0)
 	t := table.New(
 		table.WithColumns(cols),
 		table.WithFocused(true),
@@ -68,13 +88,14 @@ func (m *Library) Init() tea.Cmd {
 	return tea.Batch(WaitForEvent(m.bus), m.load())
 }
 
-// load queries the master tracks sorted by artist and reads them in one go.
+// load queries the master tracks in the current sort order and reads them
+// in one go.
 func (m *Library) load() tea.Cmd {
 	m.gen++
-	gen, ctx, a := m.gen, m.ctx, m.app
+	gen, ctx, a, field := m.gen, m.ctx, m.app, sortOrders[m.sortBy].field
 	return func() tea.Msg {
 		master := model.Master
-		ids, err := a.Query(ctx, app.Filter{Role: &master}, app.Sort{Field: model.FieldArtist})
+		ids, err := a.Query(ctx, app.Filter{Role: &master}, app.Sort{Field: field})
 		if err != nil {
 			return libraryLoaded{gen: gen, err: err}
 		}
@@ -86,7 +107,7 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.cols = columns(msg.Width)
+		m.cols = columns(msg.Width, sortOrders[m.sortBy].col)
 		m.table.SetColumns(m.cols)
 		m.refreshRows(m.table.Cursor()) // cells are padded to the column widths
 		m.table.SetWidth(msg.Width)
@@ -99,6 +120,11 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "space":
 			return m, TogglePause(m.ctx, m.app)
+		case "s":
+			m.sortBy = (m.sortBy + 1) % len(sortOrders)
+			m.cols = columns(m.width, sortOrders[m.sortBy].col)
+			m.table.SetColumns(m.cols)
+			return m, m.load() // setTracks keeps the cursor on the same track
 		}
 		prev := m.table.Cursor()
 		var cmd tea.Cmd
@@ -270,7 +296,8 @@ func (m *Library) row(t model.Track, selected bool) table.Row {
 }
 
 func (m *Library) View() tea.View {
-	title := titleStyle.Render(fmt.Sprintf("Library · %d tracks", len(m.tracks)))
+	title := titleStyle.Render(fmt.Sprintf("Library · %d tracks", len(m.tracks))) +
+		statusStyle.Render("sorted by "+sortOrders[m.sortBy].name+" · s to change")
 	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, title, m.table.View(), m.statusLine()))
 	v.AltScreen = true
 	v.WindowTitle = "crates"
@@ -283,7 +310,7 @@ func (m *Library) statusLine() string {
 	}
 	p := m.player
 	if p.Idle || p.TrackID == 0 {
-		return statusStyle.Render("stopped · space pause · q quit")
+		return statusStyle.Render("stopped · space pause · s sort · q quit")
 	}
 	name := baseName(p.Path)
 	for _, t := range m.tracks {
@@ -300,23 +327,28 @@ func (m *Library) statusLine() string {
 	return statusStyle.Width(m.width).MaxWidth(m.width).Render(line)
 }
 
-// Column indexes of the cells row tints.
+// Column indexes.
 const (
-	colKey = 3
-	colBPM = 4
+	colTitle = iota
+	colArtist
+	colGenre
+	colKey
+	colBPM
+	colLength
+	colComments
 )
 
-// columns sizes the seven columns to fill width. Widths include one space of
-// padding on both sides, which the cells carry themselves (see pad) so a
-// tinted background covers it too.
-func columns(width int) []table.Column {
+// columns sizes the seven columns to fill width and marks the sorted one
+// with "▲". Widths include one space of padding on both sides, which the
+// cells carry themselves (see pad) so a tinted background covers it too.
+func columns(width, sorted int) []table.Column {
 	const p = 2 // padding
 	const genre, key, bpm, length = 14 + p, 4 + p, 5 + p, 7 + p
 	free := width - genre - key - bpm - length
 	titleW := max(free*35/100, 10+p)
 	artistW := max(free*25/100, 8+p)
 	commentW := max(free-titleW-artistW, 8+p)
-	return []table.Column{
+	cols := []table.Column{
 		{Title: " Title", Width: titleW},
 		{Title: " Artist", Width: artistW},
 		{Title: " Genre", Width: genre},
@@ -325,6 +357,10 @@ func columns(width int) []table.Column {
 		{Title: " Length", Width: length},
 		{Title: " Comments", Width: commentW},
 	}
+	if sorted >= 0 && sorted < len(cols) {
+		cols[sorted].Title += " ▲"
+	}
+	return cols
 }
 
 // pad fits s into a cell w wide: a space each side, truncated with "…".

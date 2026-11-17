@@ -38,7 +38,7 @@ func TestBPMHueWraps(t *testing.T) {
 }
 
 func TestRowFills(t *testing.T) {
-	m := &Library{cols: columns(120)}
+	m := &Library{cols: columns(120, colArtist)}
 	tr := model.Track{Summary: model.TagSummary{Title: "t", Key: "8A", BPM: 124}}
 	row := m.row(tr, false)
 	for _, i := range []int{colKey, colBPM} {
