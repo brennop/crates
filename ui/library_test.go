@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/brennop/crates/events"
 	"github.com/brennop/crates/model"
 )
 
@@ -252,5 +254,45 @@ func TestLibraryDeleteKeepsRow(t *testing.T) {
 	reload(t, m)
 	if len(m.tracks) != 1 || m.cursor != 0 {
 		t.Fatalf("after deleting the last row: %d rows, cursor %d", len(m.tracks), m.cursor)
+	}
+}
+
+func TestScanProgressSpins(t *testing.T) {
+	e := newEnv(t)
+	e.file(e.master, "a.mp3")
+	m := libraryWith(t, e)
+	// handleEvent, not Update, so the event pump does not run and block.
+	report := func(p events.ScanProgress) []tea.Msg { return exec(m.handleEvent(p)) }
+
+	// A sweep that finds nothing to read shows nothing and does not spin.
+	if msgs := report(events.ScanProgress{Scanned: 4, Total: 4}); len(msgs) != 0 || m.spinning {
+		t.Fatalf("a no-change sweep spins: %v", msgs)
+	}
+	if strings.Contains(m.View().Content, "scanning") {
+		t.Fatal("a no-change sweep shows as a scan")
+	}
+
+	tick, ok := find[spinner.TickMsg](report(events.ScanProgress{Scanned: 1, Total: 4}))
+	if !ok {
+		t.Fatal("scan did not start the spinner")
+	}
+	if v := m.View().Content; !strings.Contains(v, "scanning") || !strings.Contains(v, "1/4") {
+		t.Errorf("title lacks the scan:\n%s", v)
+	}
+	if _, cmd := m.Update(tick); cmd == nil {
+		t.Fatal("spinner stopped mid-scan")
+	}
+
+	// A second report while spinning must not start another tick loop.
+	if msgs := report(events.ScanProgress{Scanned: 2, Total: 4}); len(msgs) != 0 {
+		t.Fatalf("a second report started a second spinner: %v", msgs)
+	}
+
+	report(events.ScanProgress{Scanned: 4, Total: 4, Done: true})
+	if strings.Contains(m.View().Content, "scanning") {
+		t.Error("finished scan still shown")
+	}
+	if _, cmd := m.Update(tick); cmd != nil || m.spinning {
+		t.Error("spinner kept ticking after the scan")
 	}
 }

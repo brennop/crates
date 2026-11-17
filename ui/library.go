@@ -8,6 +8,7 @@ import (
 	"time"
 
 	binding "charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -57,6 +58,10 @@ type Library struct {
 	confirm     *deleteConfirm // nil when closed
 	deleteMode  fsops.Mode     // delete_mode, for the confirm text
 	afterDelete deletedRow     // where the cursor goes once the deleted row is gone
+
+	scan     events.ScanProgress // the latest scan report
+	spinner  spinner.Model       // shown while busy; see busy.go
+	spinning bool                // a spinner tick is pending
 
 	width, height int
 	cols          []table.Column // current widths, so row can fill its cells
@@ -116,6 +121,7 @@ func New(ctx context.Context, a *app.App, bus *events.Bus) tea.Model {
 	return &Library{
 		ctx: ctx, app: a, bus: bus, table: t, cols: cols, sortBy: defaultSort,
 		deleteMode: a.Capabilities().DeleteMode, tagsPath: tagsPath,
+		spinner: newSpinner(),
 	}
 }
 
@@ -316,6 +322,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case spinner.TickMsg:
+		return m, m.spinTick(msg)
+
 	case events.Event:
 		return m, tea.Batch(m.handleEvent(msg), WaitForEvent(m.bus))
 	}
@@ -331,6 +340,9 @@ func (m *Library) handleEvent(e events.Event) tea.Cmd {
 	switch e := e.(type) {
 	case events.LibraryLoaded, events.TracksChanged, events.TrackRemoved:
 		return m.load()
+	case events.ScanProgress:
+		m.scan = e
+		return m.spin()
 	case events.PlayerState:
 		m.player = e
 		m.refreshRows() // the playing marker moved or changed
@@ -362,7 +374,7 @@ func (m *Library) openDialog() tea.Cmd {
 	}
 	m.dialog = newPlaylistDialog(t)
 	m.dialog.layout(m.width, m.height)
-	return m.dialog.load(m.app)
+	return tea.Batch(m.dialog.load(m.app), m.spin())
 }
 
 // delete deletes track id, remembering its row so the cursor stays there
@@ -485,14 +497,18 @@ func (m *Library) row(t model.Track, selected bool) table.Row {
 }
 
 func (m *Library) View() tea.View {
-	title := titleStyle.Render(fmt.Sprintf("Library · %d tracks", len(m.tracks))) +
-		statusStyle.Render("sorted by "+sortOrders[m.sortBy].name+" · s to change")
+	title := titleStyle.Render(fmt.Sprintf("Library · %d tracks", len(m.tracks)))
+	if s := m.scanView(); s != "" {
+		title += s
+	}
+	title += statusStyle.Render("sorted by " + sortOrders[m.sortBy].name + " · s to change")
+	title = ansi.Truncate(title, m.width, "…")
 	content := lipgloss.JoinVertical(lipgloss.Left, title, m.table.View(), m.statusLine())
 	if m.edit != nil && len(m.edit.vocab) > 0 {
 		content = overlayBottom(content, tagsPanel(m.edit.vocab, m.width), m.height)
 	}
 	if m.dialog != nil {
-		content = overlay(content, m.dialog.view(m.width, m.height), m.width, m.height)
+		content = overlay(content, m.dialog.view(m.width, m.height, m.spinner.View()), m.width, m.height)
 	}
 	if m.confirm != nil {
 		content = overlay(content, m.confirm.view(m.width, m.deleteMode), m.width, m.height)

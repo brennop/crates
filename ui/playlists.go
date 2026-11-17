@@ -225,13 +225,14 @@ func (d *playlistDialog) layout(width, height int) {
 	d.list.SetSize(d.inner, rows)
 }
 
-// view renders the box laid out for a width × height screen.
-func (d *playlistDialog) view(width, height int) string {
+// view renders the box laid out for a width × height screen, with spin as
+// the spinner frame while it loads.
+func (d *playlistDialog) view(width, height int, spin string) string {
 	d.layout(width, height)
 	var lines []string
 	switch {
 	case d.loading:
-		lines = append(lines, dialogHintStyle.Render("Loading…"))
+		lines = append(lines, dialogHintStyle.Render(spin+" Loading…"))
 	case len(d.list.Items()) == 0:
 		lines = append(lines, dialogHintStyle.Render("No editable playlists in Music."))
 	default:
