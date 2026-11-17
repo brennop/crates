@@ -100,7 +100,7 @@ type Track struct {
     Role     Role          // derived from the root Path sits under
     Size     int64
     ModTime  time.Time
-    Summary  TagSummary    // title, artist, album, album artist, track no., year, genre
+    Summary  TagSummary    // title, artist, album, album artist, track no., year, genre, comment, BPM, key
     Duration time.Duration // 0 = not known yet
     MusicID  string        // Music persistent ID; "" = not in the library
 }
@@ -114,7 +114,8 @@ type Playlist struct {
 
 - **Values, not pointers.** The library hands out copies of `Track`. The UI never holds a pointer into the index.
 - **Playlist membership** lives in the `music` package as `MusicID -> []PlaylistID`, not on `Track`. It changes outside the app and is refreshed as a whole.
-- **Summary vs full tags.** `TagSummary` is the handful of fields the list shows. The complete frame set is read on demand for the tag editor (see Tags).
+- **Summary vs full tags.** `TagSummary` is the handful of fields the list shows, sorts and filters on: title, artist, album, album artist, track no., year, genre, comment, BPM and key. The complete frame set is read on demand for the tag editor (see Tags).
+- **BPM and key.** Stored as text, as the file has them: BPM from the `TBPM` frame, key from `TKEY` (free text such as `Am` or `8A`). `TagSummary.BPM` is a number when the frame parses as one, and `0` otherwise, and the editor shows the raw frame text. Neither field is a `dhowden/tag` field, so the native reader takes both from its raw frame map.
 
 ## Library: index, cache, scan, watch
 
@@ -133,7 +134,7 @@ The `library` package owns the only copy of the index and is its only writer. Ev
 
 List columns come from a fast native reader. The tag editor reads and writes through kid3-cli, so what the editor shows is exactly what kid3 will save.
 
-- **Summary, in bulk.** A native Go ID3 reader (for example `dhowden/tag`, read-only) fills `TagSummary` during scans. No process per file.
+- **Summary, in bulk.** A native Go ID3 reader (for example `dhowden/tag`, read-only) fills `TagSummary` during scans, including comment (`Comment()`), BPM and key (`TBPM`, `TKEY` from `Raw()`). No process per file.
 - **Duration.** Returned by `Summary` along with the tags. Best effort at scan time from the MP3's Xing header, for example with `ComputeAudioDuration` in [derat/mpeg](https://pkg.go.dev/codeberg.org/derat/mpeg), which assumes constant bitrate when there is no Xing header. mpv corrects it the first time the track plays.
 - **Full tags, one file.** Opening the editor makes one kid3-cli call. kid3-cli takes commands as JSON objects such as `{"method":"get","params":["artist",2]}` and answers in JSON, so there is no text scraping ([Kid3 handbook](https://kid3.sourceforge.io/kid3_en.html)).
 - **Write.** One kid3-cli invocation per edit, one `-c` per changed frame; kid3 runs them in order and saves at the end. Check the exit status and the JSON `error` object, and wrap the call in a context timeout.
