@@ -19,8 +19,9 @@ import (
 
 // MemoryLimit caps one job's process group. Three audio jobs run at once,
 // so together they stay under about 3.6 GB. A job over the cap is killed
-// and reports ErrTooMuchMemory. Measured on a 6:43 track: Essentia BPM
-// 0.6 GB, Essentia key 0.4 GB, S-KEY 0.8 GB.
+// and reports ErrTooMuchMemory. Measured peaks, 6:43 track / 63-minute
+// mix: Essentia BPM 0.34 / 0.39 GB and S-KEY 0.77 / 0.80 GB (both stream
+// in windows); Essentia key 0.4 / 1.1 GB (loads the whole track).
 const MemoryLimit = 1200 << 20
 
 // memoryPoll is how often the cap is checked.
