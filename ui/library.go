@@ -50,15 +50,18 @@ type sortOrder struct {
 	name  string
 }
 
-// sortOrders is the cycle s steps through; the first is the default.
+// sortOrders is the cycle s steps through, in column order.
 var sortOrders = []sortOrder{
-	{model.FieldArtist, colArtist, "artist"},
 	{model.FieldTitle, colTitle, "title"},
+	{model.FieldArtist, colArtist, "artist"},
 	{model.FieldGenre, colGenre, "genre"},
 	{model.FieldKey, colKey, "key"},
 	{model.FieldBPM, colBPM, "BPM"},
 	{"duration", colLength, "length"},
 }
+
+// defaultSort is the sortOrders entry the table starts with: artist.
+const defaultSort = 1
 
 // libraryLoaded carries a query and the tracks it named, read together.
 type libraryLoaded struct {
@@ -75,13 +78,13 @@ type playTick struct {
 
 // New builds the model. Its signature matches the newUI hook in the root package.
 func New(ctx context.Context, a *app.App, bus *events.Bus) tea.Model {
-	cols := columns(100, 0)
+	cols := columns(100, sortOrders[defaultSort].col)
 	t := table.New(
 		table.WithColumns(cols),
 		table.WithFocused(true),
 		table.WithStyles(tableStyles()),
 	)
-	return &Library{ctx: ctx, app: a, bus: bus, table: t, cols: cols}
+	return &Library{ctx: ctx, app: a, bus: bus, table: t, cols: cols, sortBy: defaultSort}
 }
 
 func (m *Library) Init() tea.Cmd {

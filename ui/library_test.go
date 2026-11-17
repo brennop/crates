@@ -138,7 +138,7 @@ func TestLibrarySortCycles(t *testing.T) {
 		t.Fatal("default sort is not artist")
 	}
 	for i := range sortOrders {
-		o := sortOrders[i]
+		o := sortOrders[(defaultSort+i)%len(sortOrders)]
 		for c, col := range m.cols {
 			if got := strings.HasSuffix(col.Title, "▲"); got != (c == o.col) {
 				t.Errorf("sort %s: column %q marked %t", o.name, col.Title, got)
@@ -156,7 +156,7 @@ func TestLibrarySortCycles(t *testing.T) {
 			t.Fatalf("s after %s did not reload", o.name)
 		}
 	}
-	if m.sortBy != 0 {
+	if m.sortBy != defaultSort {
 		t.Fatalf("cycle ended on %d, want back at artist", m.sortBy)
 	}
 }
