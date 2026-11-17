@@ -6,7 +6,7 @@ Breakdown of [DESIGN.md](DESIGN.md). Phases 1–8 follow the design's build orde
 
 ## Decisions
 
-Settled on 2026-11-17. Where they differ from DESIGN.md, they take precedence.
+Settled on 2026-11-17 and folded into DESIGN.md.
 
 - **Collisions.** The UI asks. The answers are skip (no call) or overwrite (`app.Overwrite`, task 6.5). Promote itself still never overwrites.
 - **TrackID across restarts.** Stored in the cache: `id` primary key, `path` unique, so promote is an `UPDATE` of the path.
