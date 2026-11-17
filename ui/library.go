@@ -144,6 +144,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.SetHeight(max(msg.Height-2, 3)) // title line and status line
 		m.setCursor(m.cursor)                   // cells are padded to the column widths
 		m.sizePrompts()
+		if m.dialog != nil {
+			m.dialog.layout(m.width, m.height)
+		}
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -241,6 +244,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.PasteMsg:
+		if m.dialog != nil {
+			return m, m.dialog.updateList(msg)
+		}
 		return m, m.promptUpdate(msg)
 
 	case libraryLoaded:
@@ -277,7 +283,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case playlistDialogLoaded:
 		if m.dialog != nil {
-			m.dialog.loaded(msg)
+			cmd := m.dialog.loaded(msg)
+			m.dialog.layout(m.width, m.height)
+			return m, cmd
 		}
 		return m, nil
 	case AddToPlaylistResult:
@@ -306,7 +314,11 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case events.Event:
 		return m, tea.Batch(m.handleEvent(msg), WaitForEvent(m.bus))
 	}
-	// The prompt's own messages, such as a ctrl+v paste.
+	// The dialog list's own messages, such as filter results, and the
+	// prompt's, such as a ctrl+v paste.
+	if m.dialog != nil {
+		return m, m.dialog.updateList(msg)
+	}
 	return m, m.promptUpdate(msg)
 }
 
@@ -344,6 +356,7 @@ func (m *Library) openDialog() tea.Cmd {
 		return nil
 	}
 	m.dialog = newPlaylistDialog(t)
+	m.dialog.layout(m.width, m.height)
 	return m.dialog.load(m.app)
 }
 

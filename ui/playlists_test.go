@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/brennop/crates/events"
@@ -62,7 +63,10 @@ func TestPlaylistDialog(t *testing.T) {
 	if strings.Contains(view, "Smart") {
 		t.Error("view lists the non-editable playlist")
 	}
-	order := []string{m.dialog.playlists[0].Name, m.dialog.playlists[1].Name}
+	var order []string
+	for _, it := range m.dialog.list.Items() {
+		order = append(order, it.FilterValue())
+	}
 	peak := slices.Index(order, "Peak")
 
 	// Move to Peak and toggle it on; space must not pause.
@@ -125,6 +129,52 @@ func TestPlaylistDialog(t *testing.T) {
 	feed(t, m, key("esc"))
 	if m.dialog != nil || strings.Contains(m.View().Content, "Playlists ·") {
 		t.Fatal("esc did not close the dialog")
+	}
+}
+
+func TestPlaylistDialogFilter(t *testing.T) {
+	e := newEnv(t)
+	a := e.inMusic(e.file(e.master, "a.mp3"))
+	for _, n := range []string{"Warmup", "Peak", "Closing"} {
+		e.music.AddPlaylist(model.Playlist{ID: n, Name: n, Editable: true})
+	}
+	noErr(t, "refresh", run[RefreshResult](t, Refresh(e.ctx, e.app)).Err)
+	m := libraryWith(t, e)
+	loaded, _ := find[playlistDialogLoaded](feed(t, m, key("p")))
+	feed(t, m, loaded)
+
+	// Typing the filter must not close the dialog on p or q.
+	for _, k := range []string{"/", "p", "e", "a"} {
+		// Feed the filter results back, as the program would.
+		if fm, ok := find[list.FilterMatchesMsg](feed(t, m, key(k))); ok {
+			feed(t, m, fm)
+		}
+	}
+	if m.dialog == nil {
+		t.Fatal("typing the filter closed the dialog")
+	}
+	view := m.View().Content
+	if !strings.Contains(view, "/pea") || strings.Contains(view, "Warmup") {
+		t.Fatalf("filter not applied:\n%s", view)
+	}
+	feed(t, m, tea.KeyPressMsg{Code: tea.KeyEnter}) // accept the filter
+	add, ok := find[AddToPlaylistResult](feed(t, m, key("space")))
+	if !ok || add.PlaylistID != "Peak" {
+		t.Fatalf("space on the filtered row = %+v, %v", add, ok)
+	}
+	feed(t, m, add)
+	if !slices.Contains(e.music.Members("Peak"), a.MusicID) {
+		t.Fatal("track not added to Peak")
+	}
+
+	// esc clears the filter first, then closes.
+	feed(t, m, key("esc"))
+	if m.dialog == nil || !strings.Contains(m.View().Content, "Warmup") {
+		t.Fatal("esc did not just clear the filter")
+	}
+	feed(t, m, key("esc"))
+	if m.dialog != nil {
+		t.Fatal("second esc did not close the dialog")
 	}
 }
 
