@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -17,3 +18,11 @@ import (
 // reads. main closes the app after the program returns, so the model need
 // not send ui.Close.
 var newUI func(ctx context.Context, a *app.App, bus *events.Bus) tea.Model = ui.New
+
+// defaultTags is the tag vocabulary shown while editing a comment when
+// there is no TAGS.md beside the config file.
+//
+//go:embed TAGS.md
+var defaultTags string
+
+func init() { ui.DefaultTags = defaultTags }

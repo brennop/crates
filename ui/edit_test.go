@@ -208,11 +208,19 @@ func TestEditCommentShowsTags(t *testing.T) {
 		t.Error("tags stay after esc")
 	}
 
-	// No file: no panel, the prompt still opens.
+	// No file: the default vocabulary, or no panel without one.
 	m.tagsPath = filepath.Join(t.TempDir(), "missing.md")
+	defer func(d string) { DefaultTags = d }(DefaultTags)
+	DefaultTags = "# Default\nPlain\n"
+	feed(t, m, key("c"))
+	if !strings.Contains(m.View().Content, "Plain") {
+		t.Error("missing file: default tags not shown")
+	}
+	feed(t, m, key("esc"))
+	DefaultTags = ""
 	feed(t, m, key("c"))
 	if m.edit == nil || m.edit.vocab != nil {
-		t.Fatalf("missing file: edit %+v", m.edit)
+		t.Fatalf("no file, no default: edit %+v", m.edit)
 	}
 }
 

@@ -55,7 +55,7 @@ The permission belongs to the terminal app, not to the crates binary, so a new t
 
 The config file is `$CRATES_CONFIG` if set, else `$XDG_CONFIG_HOME/crates/config.toml`, else `~/.config/crates/config.toml`.
 
-A `TAGS.md` beside the config file is your tag vocabulary: while you edit a comment (`c`), its `# Heading` sections show above the status line, one row per heading. It is read each time the prompt opens, so edits show without a restart. Without the file, no panel.
+A `TAGS.md` beside the config file is your tag vocabulary: while you edit a comment (`c`), its `# Heading` sections show above the status line, one row per heading. It is read each time the prompt opens, so edits show without a restart. Without the file, crates shows the default vocabulary from the repo's `TAGS.md`, built into the binary.
 
 ```toml
 inbox_dirs    = ["~/Downloads/music", "~/Soulseek/complete"]

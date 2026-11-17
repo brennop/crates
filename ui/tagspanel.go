@@ -17,17 +17,20 @@ type tagSection struct {
 	tags string
 }
 
-// loadTags reads path, read fresh on every comment edit so changes to the
-// file show without a restart. A missing or empty file gives nil.
+// DefaultTags is the vocabulary used when the user has no TAGS.md of their
+// own. The root package sets it to the repo's TAGS.md, embedded.
+var DefaultTags string
+
+// loadTags reads path, fresh on every comment edit so changes to the file
+// show without a restart. Without a readable file it falls back to
+// DefaultTags.
 func loadTags(path string) []tagSection {
-	if path == "" {
-		return nil
+	if path != "" {
+		if data, err := os.ReadFile(path); err == nil {
+			return parseTags(string(data))
+		}
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
-	return parseTags(string(data))
+	return parseTags(DefaultTags)
 }
 
 // parseTags splits markdown into sections at each heading. Lines under a
