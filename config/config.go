@@ -64,6 +64,16 @@ func Path() (string, error) {
 	return filepath.Join(home, ".config", "crates", "config.toml"), nil
 }
 
+// TagsPath returns the tag vocabulary shown while editing a comment:
+// TAGS.md beside the config file.
+func TagsPath() (string, error) {
+	p, err := Path()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(p), "TAGS.md"), nil
+}
+
 // Load reads, validates and normalizes the config file at path.
 func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)

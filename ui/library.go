@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/brennop/crates/app"
+	"github.com/brennop/crates/config"
 	"github.com/brennop/crates/events"
 	"github.com/brennop/crates/fsops"
 	"github.com/brennop/crates/model"
@@ -49,7 +50,8 @@ type Library struct {
 	search     *searchPrompt // the / prompt; nil when closed
 	lastSearch string        // the pattern n and N repeat
 
-	edit *editPrompt // the tag edit in the status line; nil when closed
+	edit     *editPrompt // the tag edit in the status line; nil when closed
+	tagsPath string      // TAGS.md, shown over the table while editing a comment
 
 	confirm     *deleteConfirm // nil when closed
 	deleteMode  fsops.Mode     // delete_mode, for the confirm text
@@ -109,9 +111,10 @@ func New(ctx context.Context, a *app.App, bus *events.Bus) tea.Model {
 	)
 	// g is a prefix (gg, ge), so a lone g must not go to the top.
 	t.KeyMap.GotoTop = binding.NewBinding(binding.WithKeys("home"))
+	tagsPath, _ := config.TagsPath() // "" leaves the panel off
 	return &Library{
 		ctx: ctx, app: a, bus: bus, table: t, cols: cols, sortBy: defaultSort,
-		deleteMode: a.Capabilities().DeleteMode,
+		deleteMode: a.Capabilities().DeleteMode, tagsPath: tagsPath,
 	}
 }
 
@@ -484,6 +487,9 @@ func (m *Library) View() tea.View {
 	title := titleStyle.Render(fmt.Sprintf("Library · %d tracks", len(m.tracks))) +
 		statusStyle.Render("sorted by "+sortOrders[m.sortBy].name+" · s to change")
 	content := lipgloss.JoinVertical(lipgloss.Left, title, m.table.View(), m.statusLine())
+	if m.edit != nil && len(m.edit.vocab) > 0 {
+		content = overlayBottom(content, tagsPanel(m.edit.vocab, m.width), m.height)
+	}
 	if m.dialog != nil {
 		content = overlay(content, m.dialog.view(m.width, m.height), m.width, m.height)
 	}

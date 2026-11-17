@@ -2,6 +2,8 @@ package ui
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -178,5 +180,51 @@ func TestEditReadlineKeys(t *testing.T) {
 	feed(t, m, enterKey)
 	if w := lastWrite(t, e); w.Changes[0].Value != "Gone ne!" {
 		t.Fatalf("wrote %q", w.Changes[0].Value)
+	}
+}
+
+func TestEditCommentShowsTags(t *testing.T) {
+	_, m := searchLibrary(t)
+	m.tagsPath = filepath.Join(t.TempDir(), "TAGS.md")
+	if err := os.WriteFile(m.tagsPath, []byte("# Mood\n\nBright, Dreamy\n\n# Groove\n\nGroovy, Swung\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	feed(t, m, key("t"))
+	if strings.Contains(m.View().Content, "Dreamy") {
+		t.Error("title edit shows the tags")
+	}
+	feed(t, m, key("esc"))
+
+	feed(t, m, key("c"))
+	v := m.View().Content
+	for _, want := range []string{"Mood", "Bright, Dreamy", "Groove", "Groovy, Swung", "comment: "} {
+		if !strings.Contains(v, want) {
+			t.Errorf("comment edit lacks %q", want)
+		}
+	}
+	feed(t, m, key("esc"))
+	if strings.Contains(m.View().Content, "Dreamy") {
+		t.Error("tags stay after esc")
+	}
+
+	// No file: no panel, the prompt still opens.
+	m.tagsPath = filepath.Join(t.TempDir(), "missing.md")
+	feed(t, m, key("c"))
+	if m.edit == nil || m.edit.vocab != nil {
+		t.Fatalf("missing file: edit %+v", m.edit)
+	}
+}
+
+func TestParseTags(t *testing.T) {
+	got := parseTags("intro\n# A\n\nx, y\nz\n## B\nw\n")
+	want := []tagSection{{"", "intro"}, {"A", "x, y z"}, {"B", "w"}}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("section %d: %+v, want %+v", i, got[i], want[i])
+		}
 	}
 }

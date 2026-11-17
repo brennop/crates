@@ -30,6 +30,7 @@ type editPrompt struct {
 	field editField
 	input textinput.Model
 	orig  string
+	vocab []tagSection // TAGS.md, for a comment; nil otherwise
 }
 
 // openEdit opens a prompt for f on the selected track, prefilled with its
@@ -54,6 +55,9 @@ func (m *Library) openEdit(f editField) {
 	}
 	in := newPromptInput(f.label+": ", v, m.width)
 	m.edit = &editPrompt{id: t.ID, field: f, input: in, orig: v}
+	if f == editComment {
+		m.edit.vocab = loadTags(m.tagsPath)
+	}
 }
 
 // editKey handles a key while an edit prompt is open: enter writes the
