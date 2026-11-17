@@ -9,11 +9,26 @@ import (
 	"github.com/brennop/crates/model"
 )
 
-// searchPrompt is the open / prompt: what has been typed so far and the row
-// the cursor was on when it opened, where the search starts and esc returns.
+// searchPrompt is the open / prompt: what has been typed so far, and the
+// cursor row and view it opened on. The search starts from origin, and esc
+// puts both back.
 type searchPrompt struct {
-	query  string
-	origin int
+	query     string
+	origin    int
+	originTop int
+}
+
+// moveFrom moves the cursor to row, scrolling from the view the prompt
+// opened on. As in vim, every keystroke places the match against that view,
+// not against wherever the last keystroke left it.
+func (m *Library) moveFrom(s *searchPrompt, row int) {
+	m.top = s.originTop
+	m.setCursor(row)
+}
+
+// restore puts the cursor and the view back where the prompt opened.
+func (m *Library) restore(s *searchPrompt) {
+	m.moveFrom(s, s.origin)
 }
 
 // matches reports whether pat is a substring of one of t's searched fields:
@@ -74,16 +89,9 @@ func (m *Library) findMatch(pat string, from int, forward bool) (row int, wrappe
 	return 0, false, false
 }
 
-// jumpTo puts the cursor on row without scheduling playback.
-func (m *Library) jumpTo(row int) {
-	prev := m.table.Cursor()
-	m.table.SetCursor(row)
-	m.cursorMoved(prev)
-}
-
 // openSearch opens the / prompt at the cursor.
 func (m *Library) openSearch() {
-	m.search = &searchPrompt{origin: m.table.Cursor()}
+	m.search = &searchPrompt{origin: m.cursor, originTop: m.top}
 }
 
 // searchKey handles a key while the / prompt is open. Typing moves the
@@ -94,7 +102,7 @@ func (m *Library) searchKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":
 		m.search = nil
-		m.jumpTo(s.origin)
+		m.restore(s)
 		return nil
 	case "enter":
 		m.search = nil
@@ -103,24 +111,24 @@ func (m *Library) searchKey(msg tea.KeyPressMsg) tea.Cmd {
 			pat = m.lastSearch
 		}
 		if pat == "" {
-			m.jumpTo(s.origin)
+			m.restore(s)
 			m.status = "No previous search pattern"
 			return nil
 		}
 		m.lastSearch = pat
 		row, _, ok := m.findMatch(pat, s.origin, true)
 		if !ok {
-			m.jumpTo(s.origin)
+			m.restore(s)
 			m.status = "Pattern not found: " + pat
 			return nil
 		}
 		m.status = ""
-		m.jumpTo(row)
+		m.moveFrom(s, row)
 		return m.selectionMoved()
 	case "backspace":
 		if s.query == "" {
 			m.search = nil
-			m.jumpTo(s.origin)
+			m.restore(s)
 			return nil
 		}
 		r := []rune(s.query)
@@ -131,11 +139,11 @@ func (m *Library) searchKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		s.query += msg.Text
 	}
-	row, _, ok := m.findMatch(s.query, s.origin, true)
-	if !ok {
-		row = s.origin
+	if row, _, ok := m.findMatch(s.query, s.origin, true); ok {
+		m.moveFrom(s, row)
+	} else {
+		m.restore(s)
 	}
-	m.jumpTo(row)
 	return nil
 }
 
@@ -146,9 +154,9 @@ func (m *Library) searchNext(forward bool) tea.Cmd {
 		m.status = "No previous search pattern"
 		return nil
 	}
-	from := m.table.Cursor() + 1
+	from := m.cursor + 1
 	if !forward {
-		from = m.table.Cursor() - 1
+		from = m.cursor - 1
 	}
 	row, wrapped, ok := m.findMatch(m.lastSearch, from, forward)
 	if !ok {
@@ -163,6 +171,6 @@ func (m *Library) searchNext(forward bool) tea.Cmd {
 	default:
 		m.status = ""
 	}
-	m.jumpTo(row)
+	m.setCursor(row)
 	return m.selectionMoved()
 }

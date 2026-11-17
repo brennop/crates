@@ -241,16 +241,16 @@ func TestLibraryDeleteKeepsRow(t *testing.T) {
 	res, _ := find[DeleteResult](feed(t, m, key("X")))
 	m.Update(res)
 	reload(t, m)
-	if len(m.tracks) != 2 || m.table.Cursor() != 1 || m.selected() != next {
+	if len(m.tracks) != 2 || m.cursor != 1 || m.selected() != next {
 		t.Fatalf("after delete: %d rows, cursor %d on %d, want row 1 on %d",
-			len(m.tracks), m.table.Cursor(), m.selected(), next)
+			len(m.tracks), m.cursor, m.selected(), next)
 	}
 
 	// Deleting the last row lands on the new last row.
 	res, _ = find[DeleteResult](feed(t, m, key("X")))
 	m.Update(res)
 	reload(t, m)
-	if len(m.tracks) != 1 || m.table.Cursor() != 0 {
-		t.Fatalf("after deleting the last row: %d rows, cursor %d", len(m.tracks), m.table.Cursor())
+	if len(m.tracks) != 1 || m.cursor != 0 {
+		t.Fatalf("after deleting the last row: %d rows, cursor %d", len(m.tracks), m.cursor)
 	}
 }

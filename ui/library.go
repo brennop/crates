@@ -28,9 +28,12 @@ type Library struct {
 	app *app.App
 	bus *events.Bus
 
-	table  table.Model
-	tracks []model.Track // the table's rows, in order
-	gen    uint64        // latest library load; older results are dropped
+	table    table.Model   // shows only the rows on screen; see refreshRows
+	tracks   []model.Track // every row, in order
+	cursor   int           // index into tracks of the selected row
+	top      int           // index into tracks of the first row on screen
+	zPending bool          // z was pressed; zz centers the cursor
+	gen      uint64        // latest library load; older results are dropped
 
 	playSeq   uint64        // bumped on every cursor move; only the latest tick plays
 	requested model.TrackID // the track last sent to Play
@@ -131,9 +134,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		m.cols = columns(msg.Width, sortOrders[m.sortBy].col)
 		m.table.SetColumns(m.cols)
-		m.refreshRows(m.table.Cursor()) // cells are padded to the column widths
 		m.table.SetWidth(msg.Width)
 		m.table.SetHeight(max(msg.Height-2, 3)) // title line and status line
+		m.setCursor(m.cursor)                   // cells are padded to the column widths
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -162,13 +165,23 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.search != nil {
 			return m, m.searchKey(msg)
 		}
+		if m.zPending {
+			m.zPending = false
+			if msg.String() == "z" {
+				m.center()
+			}
+			return m, nil
+		}
 		switch msg.String() {
+		case "z":
+			m.zPending = true
+			return m, nil
 		case "q":
 			return m, tea.Quit
 		case "p":
 			return m, m.openDialog()
 		case "x":
-			if i := m.table.Cursor(); i >= 0 && i < len(m.tracks) {
+			if i := m.cursor; i >= 0 && i < len(m.tracks) {
 				m.confirm = newDeleteConfirm(m.tracks[i])
 			}
 			return m, nil
@@ -189,11 +202,10 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.table.SetColumns(m.cols)
 			return m, m.load() // setTracks keeps the cursor on the same track
 		}
-		prev := m.table.Cursor()
-		var cmd tea.Cmd
-		m.table, cmd = m.table.Update(msg)
-		m.cursorMoved(prev)
-		return m, tea.Batch(cmd, m.selectionMoved())
+		if m.moveKey(msg) {
+			return m, m.selectionMoved()
+		}
+		return m, nil
 
 	case libraryLoaded:
 		if msg.gen != m.gen {
@@ -259,7 +271,7 @@ func (m *Library) handleEvent(e events.Event) tea.Cmd {
 		return m.load()
 	case events.PlayerState:
 		m.player = e
-		m.refreshRows(m.table.Cursor()) // the playing marker moved or changed
+		m.refreshRows() // the playing marker moved or changed
 	case events.LoadFailed:
 		m.status = fmt.Sprintf("cannot play %s: %s", e.Path, e.Reason)
 	case events.PlayerDown:
@@ -277,7 +289,7 @@ func (m *Library) handleEvent(e events.Event) tea.Cmd {
 
 // openDialog opens the playlist dialog on the selected track.
 func (m *Library) openDialog() tea.Cmd {
-	i := m.table.Cursor()
+	i := m.cursor
 	if i < 0 || i >= len(m.tracks) {
 		return nil
 	}
@@ -344,10 +356,7 @@ func (m *Library) setTracks(ts []model.Track) tea.Cmd {
 	if !found && keep != 0 && keep == m.afterDelete.id {
 		cursor = max(min(m.afterDelete.row, len(ts)-1), 0)
 	}
-	m.refreshRows(cursor)
-	if len(ts) > 0 {
-		m.table.SetCursor(cursor)
-	}
+	m.setCursor(cursor)
 	return m.selectionMoved()
 }
 
@@ -364,36 +373,11 @@ func (m *Library) selectionMoved() tea.Cmd {
 }
 
 func (m *Library) selected() model.TrackID {
-	i := m.table.Cursor()
+	i := m.cursor
 	if i < 0 || i >= len(m.tracks) {
 		return 0
 	}
 	return m.tracks[i].ID
-}
-
-// refreshRows rebuilds every row; cursor is the row the table will select.
-func (m *Library) refreshRows(cursor int) {
-	rows := make([]table.Row, len(m.tracks))
-	for i, t := range m.tracks {
-		rows[i] = m.row(t, i == cursor)
-	}
-	m.table.SetRows(rows)
-}
-
-// cursorMoved rebuilds the rows the cursor left and landed on, since the
-// selected row is drawn without the Key and BPM tints.
-func (m *Library) cursorMoved(prev int) {
-	cur := m.table.Cursor()
-	if cur == prev {
-		return
-	}
-	rows := m.table.Rows()
-	for _, i := range []int{prev, cur} {
-		if i >= 0 && i < len(rows) && i < len(m.tracks) {
-			rows[i] = m.row(m.tracks[i], i == cur)
-		}
-	}
-	m.table.SetRows(rows)
 }
 
 // row renders t. Each cell carries its own one-space padding, so the Key and

@@ -96,8 +96,8 @@ func TestSearchIncremental(t *testing.T) {
 	if _, ok := find[playTick](msgs); ok {
 		t.Fatal("typing scheduled playback")
 	}
-	if m.table.Cursor() != 2 {
-		t.Fatalf("cursor %d, want 2 (Charlie)", m.table.Cursor())
+	if m.cursor != 2 {
+		t.Fatalf("cursor %d, want 2 (Charlie)", m.cursor)
 	}
 	if !strings.Contains(m.View().Content, "/char█") {
 		t.Error("status line lacks the prompt")
@@ -107,8 +107,8 @@ func TestSearchIncremental(t *testing.T) {
 	if !ok || tick.id != m.tracks[2].ID {
 		t.Fatalf("enter: tick %+v, %v", tick, ok)
 	}
-	if m.search != nil || m.lastSearch != "char" || m.table.Cursor() != 2 {
-		t.Fatalf("after enter: search %v, last %q, cursor %d", m.search, m.lastSearch, m.table.Cursor())
+	if m.search != nil || m.lastSearch != "char" || m.cursor != 2 {
+		t.Fatalf("after enter: search %v, last %q, cursor %d", m.search, m.lastSearch, m.cursor)
 	}
 }
 
@@ -118,14 +118,14 @@ func TestSearchEscRestores(t *testing.T) {
 
 	feed(t, m, key("/"))
 	typeText(t, m, "delta")
-	if m.table.Cursor() != 3 {
-		t.Fatalf("cursor %d, want 3", m.table.Cursor())
+	if m.cursor != 3 {
+		t.Fatalf("cursor %d, want 3", m.cursor)
 	}
 	if msgs := feed(t, m, key("esc")); len(msgs) != 0 {
 		t.Fatalf("esc ran %v", msgs)
 	}
-	if m.search != nil || m.table.Cursor() != 1 || m.lastSearch != "" {
-		t.Fatalf("after esc: search %v, cursor %d, last %q", m.search, m.table.Cursor(), m.lastSearch)
+	if m.search != nil || m.cursor != 1 || m.lastSearch != "" {
+		t.Fatalf("after esc: search %v, cursor %d, last %q", m.search, m.cursor, m.lastSearch)
 	}
 
 	// Backspace on an empty prompt closes it too.
@@ -133,8 +133,8 @@ func TestSearchEscRestores(t *testing.T) {
 	typeText(t, m, "d")
 	feed(t, m, backspaceKey)
 	feed(t, m, backspaceKey)
-	if m.search != nil || m.table.Cursor() != 1 {
-		t.Fatalf("after backspaces: search %v, cursor %d", m.search, m.table.Cursor())
+	if m.search != nil || m.cursor != 1 {
+		t.Fatalf("after backspaces: search %v, cursor %d", m.search, m.cursor)
 	}
 }
 
@@ -148,42 +148,42 @@ func TestSearchNextWraps(t *testing.T) {
 	feed(t, m, key("/"))
 	typeText(t, m, "techno")
 	feed(t, m, enterKey)
-	if m.table.Cursor() != 1 || m.status != "" {
-		t.Fatalf("cursor %d, status %q", m.table.Cursor(), m.status)
+	if m.cursor != 1 || m.status != "" {
+		t.Fatalf("cursor %d, status %q", m.cursor, m.status)
 	}
 
 	tick, ok := find[playTick](feed(t, m, key("n")))
-	if !ok || m.table.Cursor() != 3 || m.status != "" {
-		t.Fatalf("n: cursor %d, status %q, tick %v", m.table.Cursor(), m.status, ok)
+	if !ok || m.cursor != 3 || m.status != "" {
+		t.Fatalf("n: cursor %d, status %q, tick %v", m.cursor, m.status, ok)
 	}
 	if tick.id != m.tracks[3].ID {
 		t.Fatalf("n played %d", tick.id)
 	}
 	feed(t, m, key("n"))
-	if m.table.Cursor() != 1 || m.status != "search hit BOTTOM, continuing at TOP" {
-		t.Fatalf("n wrap: cursor %d, status %q", m.table.Cursor(), m.status)
+	if m.cursor != 1 || m.status != "search hit BOTTOM, continuing at TOP" {
+		t.Fatalf("n wrap: cursor %d, status %q", m.cursor, m.status)
 	}
 	feed(t, m, key("N"))
-	if m.table.Cursor() != 3 || m.status != "search hit TOP, continuing at BOTTOM" {
-		t.Fatalf("N wrap: cursor %d, status %q", m.table.Cursor(), m.status)
+	if m.cursor != 3 || m.status != "search hit TOP, continuing at BOTTOM" {
+		t.Fatalf("N wrap: cursor %d, status %q", m.cursor, m.status)
 	}
 	feed(t, m, key("N"))
-	if m.table.Cursor() != 1 || m.status != "" {
-		t.Fatalf("N: cursor %d, status %q", m.table.Cursor(), m.status)
+	if m.cursor != 1 || m.status != "" {
+		t.Fatalf("N: cursor %d, status %q", m.cursor, m.status)
 	}
 
 	// enter on an empty prompt reuses the last pattern.
 	feed(t, m, key("/"))
 	feed(t, m, enterKey)
-	if m.table.Cursor() != 1 || m.lastSearch != "techno" {
-		t.Fatalf("empty enter: cursor %d, last %q", m.table.Cursor(), m.lastSearch)
+	if m.cursor != 1 || m.lastSearch != "techno" {
+		t.Fatalf("empty enter: cursor %d, last %q", m.cursor, m.lastSearch)
 	}
 
 	// The pattern survives a re-sort.
 	feed(t, m, key("s"))
 	reload(t, m)
 	feed(t, m, key("n"))
-	if g := m.tracks[m.table.Cursor()].Summary.Genre; g != "Techno" {
+	if g := m.tracks[m.cursor].Summary.Genre; g != "Techno" {
 		t.Fatalf("n after sort landed on %q", g)
 	}
 }
@@ -208,14 +208,14 @@ func TestSearchNotFound(t *testing.T) {
 	feed(t, m, tea.KeyPressMsg{Code: tea.KeyDown})
 	feed(t, m, key("/"))
 	typeText(t, m, "zzz")
-	if m.table.Cursor() != 1 {
-		t.Fatalf("cursor %d, want 1", m.table.Cursor())
+	if m.cursor != 1 {
+		t.Fatalf("cursor %d, want 1", m.cursor)
 	}
 	if msgs := feed(t, m, enterKey); len(msgs) != 0 {
 		t.Fatalf("enter ran %v", msgs)
 	}
-	if m.table.Cursor() != 1 || m.status != "Pattern not found: zzz" {
-		t.Fatalf("cursor %d, status %q", m.table.Cursor(), m.status)
+	if m.cursor != 1 || m.status != "Pattern not found: zzz" {
+		t.Fatalf("cursor %d, status %q", m.cursor, m.status)
 	}
 	if !strings.Contains(m.View().Content, "Pattern not found: zzz") {
 		t.Error("view lacks the not-found status")
