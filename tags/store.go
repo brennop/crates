@@ -14,6 +14,9 @@ type Store interface {
 	Summary(path string) (model.TagSummary, time.Duration, error)
 	Full(ctx context.Context, path string) ([]model.Frame, error)
 	Write(ctx context.Context, paths []string, ch []model.FrameChange) error
+	// Available reports whether kid3-cli was found. Without it Full and
+	// Write return model.ErrKid3Missing.
+	Available() bool
 }
 
 var (

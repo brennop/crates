@@ -159,7 +159,7 @@ Design: Apple Music, Operations > Reconcile; Review items 3, 4, 6, 7, 8, 9.
 
 Design: Feeding the UI. Everything here is plumbing for the developer's Bubble Tea model; nothing renders.
 
-- [ ] **8.1 Freeze the `app` surface.** Collect the exported methods from Phases 6 and 7, fill any gaps, and add `Tracks(ids) []Track` (copies for the rows the UI shows), `Query(ctx, filter, sort)` and `Capabilities()` (kid3-cli present, trash method, `delete_mode`, Music enabled). The full set:
+- [x] **8.1 Freeze the `app` surface.** Collect the exported methods from Phases 6 and 7, fill any gaps, and add `Tracks(ids) []Track` (copies for the rows the UI shows), `Query(ctx, filter, sort)` and `Capabilities()` (kid3-cli present, trash method, `delete_mode`, Music enabled). The full set:
   - Library: `Query`, `Tracks`, `Refresh`, `FocusGained`
   - Files: `Promote`, `Overwrite`, `Delete`
   - Tags: `FullTags`, `WriteTags`
@@ -167,10 +167,10 @@ Design: Feeding the UI. Everything here is plumbing for the developer's Bubble T
   - Playback: `Play`, `Enqueue`, `Next`, `Previous`, `RemoveFromQueue`, `ClearQueue`, `Queue`, `TogglePause`, `Seek`, `SetVolume`
   - Music: `MusicStatus`, `LaunchMusic`, `ConfirmImport`, `CancelImport`, `DeadEntries`
   - Other: `Capabilities`, `Close`
-- [ ] **8.2 Commands.** In `ui`, one exported function per `app` method that returns a `tea.Cmd`. Its message is a result type named after the method (`PromoteResult`, `DeleteResult`, …) holding the return values and the error. `Query` takes a generation number and `QueryResult` carries it back; debouncing input and dropping stale generations are up to the UI.
-- [ ] **8.3 Event pump.** `ui.WaitForEvent(bus) tea.Cmd` blocks on `bus.Next` and returns the event value itself as the message. The UI's `Update` returns it again after each event to re-arm it.
-- [ ] **8.4 Tests.** Against fakes, each command returns its result message, and the pump delivers events in bus order.
-- [ ] **8.5 API reference.** `docs/api.md`: each command, its result message, the errors it can return, and the events that follow it. Cover the flows the UI drives: promote with collisions (skip means no call, overwrite means `Overwrite`); the safety valve (`ImportPending`, then `ConfirmImport` or `CancelImport`); `MusicStatus` and `LaunchMusic`; the `ErrPlaylistsLost` and `ErrBackupKept` cases; focus (turn on focus reporting in the `tea.View`, then send `FocusGained`).
+- [x] **8.2 Commands.** In `ui`, one exported function per `app` method that returns a `tea.Cmd`. Its message is a result type named after the method (`PromoteResult`, `DeleteResult`, …) holding the return values and the error. `Query` takes a generation number and `QueryResult` carries it back; debouncing input and dropping stale generations are up to the UI.
+- [x] **8.3 Event pump.** `ui.WaitForEvent(bus) tea.Cmd` blocks on `bus.Next` and returns the event value itself as the message. The UI's `Update` returns it again after each event to re-arm it.
+- [x] **8.4 Tests.** Against fakes, each command returns its result message, and the pump delivers events in bus order.
+- [x] **8.5 API reference.** `docs/api.md`: each command, its result message, the errors it can return, and the events that follow it. Cover the flows the UI drives: promote with collisions (skip means no call, overwrite means `Overwrite`); the safety valve (`ImportPending`, then `ConfirmImport` or `CancelImport`); `MusicStatus` and `LaunchMusic`; the `ErrPlaylistsLost` and `ErrBackupKept` cases; focus (turn on focus reporting in the `tea.View`, then send `FocusGained`).
 
 ## Phase 9: Wiring and release
 

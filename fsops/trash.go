@@ -62,6 +62,22 @@ func Delete(path string, mode Mode) error {
 	return fmt.Errorf("fsops: unknown delete mode %q", mode)
 }
 
+// TrashMethod is how Trash reaches the Trash.
+type TrashMethod string
+
+const (
+	TrashCommand TrashMethod = "command" // /usr/bin/trash
+	TrashFinder  TrashMethod = "finder"  // Finder through osascript; needs the automation permission
+)
+
+// Method reports which way Trash will go on this machine.
+func Method() TrashMethod {
+	if hasTrashBin() {
+		return TrashCommand
+	}
+	return TrashFinder
+}
+
 // Trash moves path to the Trash. It uses /usr/bin/trash when that exists
 // (macOS 15 and later) and falls back to Finder through osascript otherwise.
 // Files moved this way get no Put Back. The command has trashTimeout to finish.
