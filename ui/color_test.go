@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/brennop/crates/model"
 )
 
@@ -35,14 +37,19 @@ func TestBPMHueWraps(t *testing.T) {
 	}
 }
 
-func TestRowTints(t *testing.T) {
-	m := &Library{}
+func TestRowFills(t *testing.T) {
+	m := &Library{cols: columns(120)}
 	tr := model.Track{Summary: model.TagSummary{Title: "t", Key: "8A", BPM: 124}}
 	row := m.row(tr, false)
-	if !strings.Contains(row[3], "\x1b[38;2;") || !strings.Contains(row[4], "\x1b[38;2;") {
-		t.Errorf("key/bpm not tinted: %q %q", row[3], row[4])
+	for _, i := range []int{colKey, colBPM} {
+		if !strings.Contains(row[i], "\x1b[48;2;") {
+			t.Errorf("cell %d has no background: %q", i, row[i])
+		}
+		if w := ansi.StringWidth(row[i]); w != m.cols[i].Width {
+			t.Errorf("cell %d is %d wide, want the full column %d", i, w, m.cols[i].Width)
+		}
 	}
-	if sel := m.row(tr, true); sel[3] != "8A" || sel[4] != "124" {
-		t.Errorf("selected row tinted: %q %q", sel[3], sel[4])
+	if sel := m.row(tr, true); sel[colKey] != " 8A" || sel[colBPM] != " 124" {
+		t.Errorf("selected row filled: %q %q", sel[colKey], sel[colBPM])
 	}
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/lucasb-eyer/go-colorful"
 )
 
-// Key and BPM cells are tinted in OKLCH at a fixed lightness and chroma, so
+// Key and BPM cells are filled in OKLCH at a fixed lightness and chroma, so
 // only the hue carries the value and every tint reads equally bright.
 const (
 	cellL = 0.78
@@ -22,10 +22,18 @@ const (
 	bpmHuePerBeat = 4.0
 )
 
-// tint renders s in the OKLCH hue h (degrees), gamut-clamped to sRGB.
-func tint(s string, h float64) string {
+// cellText is the dark text drawn over the light cell backgrounds.
+var cellText = lipgloss.Color(colorful.OkLch(0.25, 0, 0).Clamped().Hex())
+
+// fill renders the cell s, w wide, on the OKLCH hue h (degrees),
+// gamut-clamped to sRGB.
+func fill(s string, w int, h float64) string {
 	c := colorful.OkLch(cellL, cellC, h).Clamped()
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(c.Hex())).Render(s)
+	return lipgloss.NewStyle().
+		Background(lipgloss.Color(c.Hex())).
+		Foreground(cellText).
+		Width(w).MaxWidth(w).
+		Render(s)
 }
 
 // keyHue places a key on the Camelot wheel, one turn for the twelve

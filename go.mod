@@ -8,6 +8,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.0
 	codeberg.org/derat/mpeg v0.0.0-20260508234456-e65f288d7f2e
 	github.com/BurntSushi/toml v1.4.0
+	github.com/charmbracelet/x/ansi v0.11.6
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/lucasb-eyer/go-colorful v1.3.0
 	golang.org/x/text v0.16.0
@@ -17,7 +18,6 @@ require (
 require (
 	github.com/charmbracelet/colorprofile v0.4.2 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260205113103-524a6607adb8 // indirect
-	github.com/charmbracelet/x/ansi v0.11.6 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
 	github.com/charmbracelet/x/windows v0.2.2 // indirect

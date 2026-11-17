@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/brennop/crates/app"
 	"github.com/brennop/crates/events"
@@ -36,6 +37,7 @@ type Library struct {
 	status    string // last error, shown in the status line
 
 	width, height int
+	cols          []table.Column // current widths, so row can fill its cells
 }
 
 // libraryLoaded carries a query and the tracks it named, read together.
@@ -53,12 +55,13 @@ type playTick struct {
 
 // New builds the model. Its signature matches the newUI hook in the root package.
 func New(ctx context.Context, a *app.App, bus *events.Bus) tea.Model {
+	cols := columns(100)
 	t := table.New(
-		table.WithColumns(columns(100)),
+		table.WithColumns(cols),
 		table.WithFocused(true),
 		table.WithStyles(tableStyles()),
 	)
-	return &Library{ctx: ctx, app: a, bus: bus, table: t}
+	return &Library{ctx: ctx, app: a, bus: bus, table: t, cols: cols}
 }
 
 func (m *Library) Init() tea.Cmd {
@@ -83,7 +86,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.table.SetColumns(columns(msg.Width))
+		m.cols = columns(msg.Width)
+		m.table.SetColumns(m.cols)
+		m.refreshRows(m.table.Cursor()) // cells are padded to the column widths
 		m.table.SetWidth(msg.Width)
 		m.table.SetHeight(max(msg.Height-2, 3)) // title line and status line
 		return m, nil
@@ -227,8 +232,10 @@ func (m *Library) cursorMoved(prev int) {
 	m.table.SetRows(rows)
 }
 
-// row renders t. The selected row stays plain: a tint's closing reset would
-// clear the selection background for the rest of the row.
+// row renders t. Each cell carries its own one-space padding, so the Key and
+// BPM backgrounds fill the whole cell. The selected row stays untinted: a
+// tint's closing reset would clear the selection background for the rest of
+// the row.
 func (m *Library) row(t model.Track, selected bool) table.Row {
 	s := t.Summary
 	title := s.Title
@@ -242,17 +249,24 @@ func (m *Library) row(t model.Track, selected bool) table.Row {
 			mark = "‖ "
 		}
 	}
-	key := s.Key
 	bpm, _ := s.Field(model.FieldBPM)
-	if !selected {
-		if h, ok := keyHue(key); ok {
-			key = tint(key, h)
+	row := table.Row{mark + title, s.Artist, s.Genre, s.Key, bpm, clock(t.Duration), oneLine(s.Comment)}
+	for i := range row {
+		w := 0
+		if i < len(m.cols) {
+			w = m.cols[i].Width
+		}
+		row[i] = pad(row[i], w)
+	}
+	if !selected && len(m.cols) > colBPM {
+		if h, ok := keyHue(s.Key); ok {
+			row[colKey] = fill(row[colKey], m.cols[colKey].Width, h)
 		}
 		if s.BPM > 0 {
-			bpm = tint(bpm, bpmHue(s.BPM))
+			row[colBPM] = fill(row[colBPM], m.cols[colBPM].Width, bpmHue(s.BPM))
 		}
 	}
-	return table.Row{mark + title, s.Artist, s.Genre, key, bpm, clock(t.Duration), oneLine(s.Comment)}
+	return row
 }
 
 func (m *Library) View() tea.View {
@@ -286,23 +300,37 @@ func (m *Library) statusLine() string {
 	return statusStyle.Width(m.width).MaxWidth(m.width).Render(line)
 }
 
-// columns sizes the seven columns to fill width. Each cell has one space of
-// padding on both sides.
+// Column indexes of the cells row tints.
+const (
+	colKey = 3
+	colBPM = 4
+)
+
+// columns sizes the seven columns to fill width. Widths include one space of
+// padding on both sides, which the cells carry themselves (see pad) so a
+// tinted background covers it too.
 func columns(width int) []table.Column {
-	const genre, key, bpm, length = 14, 4, 5, 7
-	free := width - 7*2 - genre - key - bpm - length
-	titleW := max(free*35/100, 10)
-	artistW := max(free*25/100, 8)
-	commentW := max(free-titleW-artistW, 8)
+	const p = 2 // padding
+	const genre, key, bpm, length = 14 + p, 4 + p, 5 + p, 7 + p
+	free := width - genre - key - bpm - length
+	titleW := max(free*35/100, 10+p)
+	artistW := max(free*25/100, 8+p)
+	commentW := max(free-titleW-artistW, 8+p)
 	return []table.Column{
-		{Title: "Title", Width: titleW},
-		{Title: "Artist", Width: artistW},
-		{Title: "Genre", Width: genre},
-		{Title: "Key", Width: key},
-		{Title: "BPM", Width: bpm},
-		{Title: "Length", Width: length},
-		{Title: "Comments", Width: commentW},
+		{Title: " Title", Width: titleW},
+		{Title: " Artist", Width: artistW},
+		{Title: " Genre", Width: genre},
+		{Title: " Key", Width: key},
+		{Title: " BPM", Width: bpm},
+		{Title: " Length", Width: length},
+		{Title: " Comments", Width: commentW},
 	}
+}
+
+// pad fits s into a cell w wide: a space each side, truncated with "…".
+// The table pads the right side out to w.
+func pad(s string, w int) string {
+	return " " + ansi.Truncate(s, max(w-2, 0), "…")
 }
 
 var (
@@ -313,7 +341,9 @@ var (
 
 func tableStyles() table.Styles {
 	s := table.DefaultStyles()
+	s.Cell = s.Cell.Padding(0) // cells pad themselves; see columns
 	s.Header = s.Header.
+		Padding(0).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderBottom(true).
 		BorderForeground(lipgloss.Color("240"))
