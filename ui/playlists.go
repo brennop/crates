@@ -4,14 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 
 	binding "charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
-
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/brennop/crates/app"
 	"github.com/brennop/crates/model"
@@ -95,7 +92,7 @@ func (pd playlistDelegate) Render(w io.Writer, m list.Model, index int, item lis
 		base = tableStyles().Selected
 	}
 	name := lipgloss.StyleRunes(p.Name, m.MatchesForItem(index), base.Underline(true), base)
-	row := ansi.Truncate(base.Render(box+" ")+name, m.Width(), "…")
+	row := fitLine(base.Render(box+" ")+name, m.Width())
 	fmt.Fprint(w, base.Width(m.Width()).Render(row))
 }
 
@@ -200,27 +197,16 @@ func (d *playlistDialog) done(ids []model.TrackID, pid string, add bool, err err
 	return true
 }
 
-var (
-	dialogStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("240")).
-			Padding(0, 1)
-	dialogTitleStyle = lipgloss.NewStyle().Bold(true)
-	dialogErrStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	dialogHintStyle  = lipgloss.NewStyle().Faint(true)
-)
-
 // layout fits the box to a width × height screen: its inner width, and the
 // list sized to the rows that fit, so paging follows the screen. Call it on
 // every change to the screen size, the rows, the filter or the error line.
 func (d *playlistDialog) layout(width, height int) {
-	const chrome = 4 // border and padding
 	items := d.list.Items()
-	inner := lipgloss.Width("Playlists · " + d.name)
+	inner := lipgloss.Width(d.title())
 	for _, it := range items {
 		inner = max(inner, lipgloss.Width("[x] "+it.FilterValue()))
 	}
-	d.inner = min(max(inner, 36), max(width-chrome-4, 10), 60)
+	d.inner = dialogWidth(inner, width)
 
 	rows := max(height-6, 1) // border, title, blank, blank, hints
 	if d.err != "" {
@@ -242,8 +228,7 @@ func (d *playlistDialog) layout(width, height int) {
 // view renders the box laid out for a width × height screen.
 func (d *playlistDialog) view(width, height int) string {
 	d.layout(width, height)
-	fit := func(s string) string { return ansi.Truncate(s, d.inner, "…") }
-	lines := []string{dialogTitleStyle.Render(fit("Playlists · " + d.name)), ""}
+	var lines []string
 	switch {
 	case d.loading:
 		lines = append(lines, dialogHintStyle.Render("Loading…"))
@@ -256,11 +241,12 @@ func (d *playlistDialog) view(width, height int) string {
 		lines = append(lines, d.list.View())
 	}
 	if d.err != "" {
-		lines = append(lines, dialogErrStyle.Render(fit(d.err)))
+		lines = append(lines, dialogErrStyle.Render(fitLine(d.err, d.inner)))
 	}
-	lines = append(lines, "", dialogHintStyle.Render(hints(d.inner, d.hints()...)))
-	return dialogStyle.Render(strings.Join(lines, "\n"))
+	return dialogBox(d.inner, d.title(), lines, d.hints()...)
 }
+
+func (d *playlistDialog) title() string { return "Playlists · " + d.name }
 
 // hints are the keys the dialog's hint line lists, which change while a
 // filter is typed or set.
@@ -277,14 +263,4 @@ func (d *playlistDialog) hints() []binding.Binding {
 		return []binding.Binding{dialogKeys.Toggle, clear, close}
 	}
 	return []binding.Binding{dialogKeys.Toggle, lk.Filter, dialogKeys.Close}
-}
-
-// overlay draws box centered over base.
-func overlay(base, box string, width, height int) string {
-	x := max((width-lipgloss.Width(box))/2, 0)
-	y := max((height-lipgloss.Height(box))/2, 0)
-	return lipgloss.NewCompositor(
-		lipgloss.NewLayer(base),
-		lipgloss.NewLayer(box).X(x).Y(y).Z(1),
-	).Render()
 }
