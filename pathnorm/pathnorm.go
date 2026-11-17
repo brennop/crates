@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
+	"unicode"
 
 	"golang.org/x/text/unicode/norm"
 )
@@ -63,4 +65,66 @@ func Within(path, dir string) bool {
 
 func startsWithDotDot(rel string) bool {
 	return len(rel) >= 3 && rel[:2] == ".." && rel[2] == filepath.Separator
+}
+
+// WithinKey is Within for paths that may differ from dir only in case: both
+// are compared by Key. Both must already be normalized.
+func WithinKey(path, dir string, caseSensitive bool) bool {
+	kp, kd := Key(path, caseSensitive), Key(dir, caseSensitive)
+	if kp == kd {
+		return true
+	}
+	if !strings.HasSuffix(kd, string(filepath.Separator)) {
+		kd += string(filepath.Separator)
+	}
+	return strings.HasPrefix(kp, kd)
+}
+
+// Key is the comparison key for a normalized path: the path itself on a
+// case-sensitive volume, case-folded on a case-insensitive one.
+func Key(path string, caseSensitive bool) string {
+	if caseSensitive {
+		return path
+	}
+	return strings.ToLower(path)
+}
+
+// Child joins name, found by listing dir, onto dir and returns it in NFC.
+// dir must already be normalized. Symlinks are not resolved: the entry is
+// the link itself, so a link inside a root stays inside it.
+func Child(dir, name string) string {
+	return norm.NFC.String(filepath.Join(dir, name))
+}
+
+// CaseSensitive reports whether the volume holding dir distinguishes names
+// that differ only in case. It stats dir with its letters' case swapped: if
+// that names the same file, the volume is case-insensitive. The check only
+// reads. A path with no letters cannot be tested and is reported as
+// case-sensitive.
+func CaseSensitive(dir string) (bool, error) {
+	st, err := os.Stat(dir)
+	if err != nil {
+		return true, err
+	}
+	swapped := swapCase(dir)
+	if swapped == dir {
+		return true, nil
+	}
+	other, err := os.Stat(swapped)
+	if err != nil {
+		return true, nil
+	}
+	return !os.SameFile(st, other), nil
+}
+
+func swapCase(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case unicode.IsUpper(r):
+			return unicode.ToLower(r)
+		case unicode.IsLower(r):
+			return unicode.ToUpper(r)
+		}
+		return r
+	}, s)
 }
