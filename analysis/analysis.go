@@ -169,19 +169,17 @@ func (a *Analyzer) script(ctx context.Context, out any, name string, args ...str
 	}
 	ctx, cancel := context.WithTimeout(ctx, ScriptTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, uv, append([]string{"run", "--quiet", "--script", filepath.Join(dir, name)}, args...)...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
+	stdout, stderr, err := runGroup(ctx, uv, append([]string{"run", "--quiet", "--script", filepath.Join(dir, name)}, args...)...)
+	if err != nil {
+		if ctx.Err() != nil || errors.Is(err, ErrTooMuchMemory) {
+			return err
 		}
-		if msg := lastLine(stderr.String()); msg != "" {
+		if msg := lastLine(string(stderr)); msg != "" {
 			return errors.New(msg)
 		}
 		return err
 	}
-	if err := json.Unmarshal(stdout.Bytes(), out); err != nil {
+	if err := json.Unmarshal(stdout, out); err != nil {
 		return fmt.Errorf("%s: bad output: %w", name, err)
 	}
 	return nil

@@ -139,9 +139,9 @@ Music errors anywhere above are `ErrMusicUnavailable` (not running, autolaunch o
 
 | Command | Result | Errors | Events after |
 | --- | --- | --- | --- |
-| `Analyze(ctx, a, id, job)` | `AnalyzeResult{ID, Result}` | in `Result.Err`: `ErrUnknownTrack`, `analysis.ErrNoUV`, `analysis.ErrNoBeatportToken`, a script's or Beatport's error | — |
+| `Analyze(ctx, a, id, job)` | `AnalyzeResult{ID, Result}` | in `Result.Err`: `ErrUnknownTrack`, `analysis.ErrNoUV`, `analysis.ErrNoBeatportToken`, `analysis.ErrTooMuchMemory`, a script's or Beatport's error | — |
 
-`job` is one of `analysis.Jobs`: `BPM` (Essentia's RhythmExtractor2013), `SKey` (Deezer's S-KEY), `EssentiaKey` (Essentia's KeyExtractor with the `edma`, `bgate` and `braw` profiles) and `Beatport` (a v4 catalog search for "artist title", with the token in `BEATPORT_TOKEN`). Batch one command per job to run them in parallel. Nothing is written; the results are only to read. The audio jobs run embedded Python scripts with `uv run --script`; the first run installs their environments, which takes minutes.
+`job` is one of `analysis.Jobs`: `BPM` (Essentia's RhythmExtractor2013), `SKey` (Deezer's S-KEY), `EssentiaKey` (Essentia's KeyExtractor with the `edma`, `bgate` and `braw` profiles) and `Beatport` (a v4 catalog search for "artist title", with the token in `BEATPORT_TOKEN`). Batch one command per job to run them in parallel. Nothing is written; the results are only to read. The audio jobs run embedded Python scripts with `uv run --script`; the first run installs their environments, which takes minutes. Each script runs at lower priority in its own process group: cancelling ctx kills the whole group, and a group over `analysis.MemoryLimit` (1.2 GB) is killed with `ErrTooMuchMemory`.
 
 ### Other
 
