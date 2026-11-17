@@ -21,3 +21,11 @@ func (a *App) Analyze(ctx context.Context, id model.TrackID, job analysis.Job) a
 	defer stop()
 	return a.analyzer.Run(ctx, job, analysis.Track{Path: t.Path, Artist: t.Summary.Artist, Title: t.Summary.Title})
 }
+
+// HasBeatportToken reports whether a Beatport token is saved, whether or
+// not Beatport will still accept it.
+func (a *App) HasBeatportToken() bool { return a.analyzer.HasBeatportToken() }
+
+// SaveBeatportToken saves s, a Beatport token response as JSON or a bare
+// access token, for the Beatport job.
+func (a *App) SaveBeatportToken(s string) error { return a.analyzer.SaveBeatportToken(s) }

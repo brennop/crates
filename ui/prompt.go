@@ -45,6 +45,8 @@ func (m *Library) promptUpdate(msg tea.Msg) tea.Cmd {
 		return m.searchUpdate(msg)
 	case m.edit != nil:
 		return m.editUpdate(msg)
+	case m.token != nil:
+		return m.tokenUpdate(msg)
 	}
 	return nil
 }
@@ -56,5 +58,8 @@ func (m *Library) sizePrompts() {
 	}
 	if m.edit != nil {
 		sizePromptInput(&m.edit.input, m.width)
+	}
+	if m.token != nil {
+		sizePromptInput(&m.token.input, m.width)
 	}
 }

@@ -11,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/brennop/crates/analysis"
 	"github.com/brennop/crates/app"
 	"github.com/brennop/crates/config"
 	"github.com/brennop/crates/events"
@@ -87,6 +88,7 @@ func newEnv(t *testing.T) *env {
 		},
 		Bus:      e.bus,
 		Settings: settings,
+		Analyzer: analysis.New(analysis.Options{BeatportTokenFile: filepath.Join(root, "beatport.json")}),
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -2,9 +2,12 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
+	binding "charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
@@ -18,12 +21,19 @@ import (
 // answers. The panel sits in the top right corner and takes no keys, so
 // the rest of the Library works while it is open. Closing it cancels the
 // jobs still running.
+//
+// Opening the panel with no Beatport token saved, or a Beatport answer that
+// the token was refused, opens a prompt in the status line for a new one: a
+// token response as JSON, or a bare access token. Enter saves it, then opens
+// the panel or runs the Beatport job again; esc opens the panel without it,
+// or leaves the refusal showing.
 
 // analysisPanel is the open panel: the track it analyzes and what has come
 // back so far.
 type analysisPanel struct {
 	track   model.Track
 	results map[analysis.Job]analysis.Result
+	ctx     context.Context // the jobs', cancelled on close
 	cancel  context.CancelFunc
 }
 
@@ -43,12 +53,21 @@ func (m *Library) toggleAnalysis() tea.Cmd {
 		m.analysis = nil
 		return nil
 	}
+	if !m.app.HasBeatportToken() {
+		m.openTokenPrompt()
+		return nil
+	}
+	return m.openAnalysis()
+}
+
+// openAnalysis opens the panel on the selected track and starts the jobs.
+func (m *Library) openAnalysis() tea.Cmd {
 	i := m.cursor
 	if i < 0 || i >= len(m.tracks) {
 		return nil
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
-	p := &analysisPanel{track: m.tracks[i], results: map[analysis.Job]analysis.Result{}, cancel: cancel}
+	p := &analysisPanel{track: m.tracks[i], results: map[analysis.Job]analysis.Result{}, ctx: ctx, cancel: cancel}
 	m.analysis = p
 	cmds := []tea.Cmd{m.spin()}
 	for _, job := range analysis.Jobs {
@@ -57,11 +76,65 @@ func (m *Library) toggleAnalysis() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// analyzed records a job's result, if the panel is still open on its track.
+// analyzed records a job's result, if the panel is still open on its track,
+// and asks for a new token when Beatport refused the saved one.
 func (m *Library) analyzed(msg AnalyzeResult) {
 	if p := m.analysis; p != nil && p.track.ID == msg.ID {
 		p.results[msg.Result.Job] = msg.Result
+		if errors.Is(msg.Result.Err, analysis.ErrBeatportRefused) && m.search == nil && m.edit == nil {
+			m.openTokenPrompt()
+		}
 	}
+}
+
+// openTokenPrompt asks for a Beatport token in the status line.
+func (m *Library) openTokenPrompt() {
+	m.token = &tokenPrompt{input: newPromptInput("Beatport token: ", "", m.width)}
+}
+
+// tokenPrompt is the open Beatport token prompt.
+type tokenPrompt struct{ input textinput.Model }
+
+// tokenKey handles a key while the token prompt is open: enter saves the
+// token, esc drops the prompt (opening the panel without a token if it
+// was not open yet), and the rest edit the line.
+func (m *Library) tokenKey(msg tea.KeyPressMsg) tea.Cmd {
+	switch {
+	case binding.Matches(msg, promptKeys.Cancel):
+		m.token = nil
+		if m.analysis == nil {
+			return m.openAnalysis()
+		}
+		return nil
+	case binding.Matches(msg, promptKeys.Accept):
+		v := m.token.input.Value()
+		m.token = nil
+		return SaveBeatportToken(m.app, v)
+	}
+	return m.tokenUpdate(msg)
+}
+
+// tokenUpdate passes msg to the token prompt's input.
+func (m *Library) tokenUpdate(msg tea.Msg) tea.Cmd {
+	var cmd tea.Cmd
+	m.token.input, cmd = m.token.input.Update(msg)
+	return cmd
+}
+
+// tokenSaved opens the panel, or runs the Beatport job again on the open
+// one, once a token is saved.
+func (m *Library) tokenSaved(msg SaveBeatportTokenResult) tea.Cmd {
+	if msg.Err != nil {
+		m.status = "Beatport token: " + msg.Err.Error()
+		return nil
+	}
+	m.status = ""
+	p := m.analysis
+	if p == nil {
+		return m.openAnalysis()
+	}
+	delete(p.results, analysis.Beatport)
+	return tea.Batch(m.spin(), Analyze(p.ctx, m.app, p.track.ID, analysis.Beatport))
 }
 
 // pending reports whether a job has not answered yet.

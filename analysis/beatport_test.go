@@ -30,8 +30,14 @@ func TestBeatportPicksArtistMatch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a := New(Options{BeatportToken: "tok"})
+	a := New(Options{BeatportTokenFile: filepath.Join(t.TempDir(), "beatport.json")})
 	a.api = srv.URL
+	if a.HasBeatportToken() {
+		t.Fatal("a token before any was saved")
+	}
+	if err := a.SaveBeatportToken(" tok\n"); err != nil || !a.HasBeatportToken() {
+		t.Fatalf("save a bare token: %v", err)
+	}
 	r := a.Run(context.Background(), Beatport, Track{Artist: "Daft Punk", Title: "Around the World"})
 	if r.Err != nil {
 		t.Fatal(r.Err)
@@ -40,9 +46,10 @@ func TestBeatportPicksArtistMatch(t *testing.T) {
 		t.Fatalf("result %+v", r)
 	}
 
-	a.opts.BeatportToken = "bad"
-	if r := a.Run(context.Background(), Beatport, Track{Artist: "x"}); r.Err == nil {
-		t.Fatal("a refused token gave no error")
+	// Refused, with no refresh token to try.
+	a.SaveBeatportToken("bad")
+	if r := a.Run(context.Background(), Beatport, Track{Artist: "x"}); !errors.Is(r.Err, ErrBeatportRefused) {
+		t.Fatalf("a refused token: %v", r.Err)
 	}
 }
 
@@ -82,9 +89,11 @@ func TestBeatportRefreshesStoredToken(t *testing.T) {
 	defer srv.Close()
 
 	path := filepath.Join(t.TempDir(), "beatport.json")
-	os.WriteFile(path, []byte(`{"access_token":"`+jwt+`","refresh_token":"rt0","expires_in":600}`), 0o600)
 	a := New(Options{BeatportTokenFile: path})
 	a.api = srv.URL
+	if err := a.SaveBeatportToken(`{"access_token":"` + jwt + `","refresh_token":"rt0","expires_in":600}`); err != nil {
+		t.Fatal(err)
+	}
 	run := func() {
 		t.Helper()
 		if r := a.Run(context.Background(), Beatport, Track{Artist: "A", Title: "T"}); r.Err != nil || r.BPM != 120 {
@@ -98,7 +107,7 @@ func TestBeatportRefreshesStoredToken(t *testing.T) {
 		return tok
 	}
 
-	run() // no expires_at: refreshes first
+	run() // the access token is refused: refreshed
 	if tok := saved(); refreshes != 1 || tok.AccessToken != "at1" || tok.RefreshToken != "rt1" || tok.ClientID != "cid" || tok.ExpiresAt < time.Now().Unix()+500 {
 		t.Fatalf("after first run: %d refreshes, saved %+v", refreshes, tok)
 	}

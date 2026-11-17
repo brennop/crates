@@ -326,3 +326,11 @@ func WaitForEvent(bus *events.Bus) tea.Cmd {
 		return e
 	}
 }
+
+// SaveBeatportTokenResult answers SaveBeatportToken.
+type SaveBeatportTokenResult struct{ Err error }
+
+// SaveBeatportToken saves a Beatport token for the Beatport job.
+func SaveBeatportToken(a *app.App, token string) tea.Cmd {
+	return func() tea.Msg { return SaveBeatportTokenResult{Err: a.SaveBeatportToken(token)} }
+}

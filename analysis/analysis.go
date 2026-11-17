@@ -84,13 +84,10 @@ type Track struct {
 
 // Options configure an Analyzer.
 type Options struct {
-	// BeatportToken is an OAuth access token for Beatport's v4 API. It is
-	// used as is and never refreshed.
-	BeatportToken string
 	// BeatportTokenFile holds a Beatport token response (access_token,
-	// refresh_token, expires_in), used when BeatportToken is "". The job
+	// refresh_token, expires_in); SaveBeatportToken writes it. The job
 	// refreshes the access token when it expires and writes the new pair
-	// back. With neither, the Beatport job returns ErrNoBeatportToken.
+	// back. Without the file the Beatport job returns ErrNoBeatportToken.
 	BeatportTokenFile string
 	// ScriptDir is where the embedded scripts are written. "" means the
 	// user cache dir.
@@ -98,7 +95,11 @@ type Options struct {
 }
 
 // ErrNoBeatportToken: the Beatport job has no token to call the API with.
-var ErrNoBeatportToken = errors.New("no Beatport token: set BEATPORT_TOKEN or save a token response to beatport.json beside the config")
+var ErrNoBeatportToken = errors.New("no Beatport token")
+
+// ErrBeatportRefused: Beatport refused the token, and refreshing it did not
+// help (or was refused too). A new one has to be saved.
+var ErrBeatportRefused = errors.New("Beatport refused the token")
 
 // ErrNoUV: uv is not on PATH, so the audio jobs cannot run.
 var ErrNoUV = errors.New("uv not found on PATH: install it (brew install uv)")

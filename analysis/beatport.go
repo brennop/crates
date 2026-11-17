@@ -54,7 +54,7 @@ func (a *Analyzer) beatport(ctx context.Context, t Track) Result {
 		return r
 	}
 	resp, err := a.search(ctx, tok, q)
-	if err == nil && refused(resp) && a.opts.BeatportToken == "" {
+	if err == nil && refused(resp) {
 		// The stored token may have been revoked before it expired:
 		// refresh it once and try again.
 		resp.Body.Close()
@@ -69,7 +69,7 @@ func (a *Analyzer) beatport(ctx context.Context, t Track) Result {
 	defer resp.Body.Close()
 	switch {
 	case refused(resp):
-		r.Err = fmt.Errorf("Beatport refused the token (%s): get a fresh one", resp.Status)
+		r.Err = fmt.Errorf("%w (%s)", ErrBeatportRefused, resp.Status)
 		return r
 	case resp.StatusCode != http.StatusOK:
 		r.Err = fmt.Errorf("Beatport: %s", resp.Status)

@@ -28,7 +28,7 @@ type Config struct {
 	NewPlayer func(events.Sink) (player.Player, error)
 	Bus       events.Sink // the UI's bus
 	Settings  config.Config
-	Analyzer  *analysis.Analyzer // nil: one with no Beatport token
+	Analyzer  *analysis.Analyzer // nil: one that cannot save a Beatport token
 }
 
 // ErrUnknownTrack: an ID is not in the index (deleted, or never there).

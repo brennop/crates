@@ -54,8 +54,9 @@ type Library struct {
 	search     *searchPrompt // the / prompt; nil when closed
 	lastSearch string        // the pattern n and N repeat
 
-	edit     *editPrompt // the tag edit in the status line; nil when closed
-	tagsPath string      // TAGS.md, shown over the table while editing a comment
+	edit     *editPrompt  // the tag edit in the status line; nil when closed
+	token    *tokenPrompt // the Beatport token prompt; nil when closed; see analysis.go
+	tagsPath string       // TAGS.md, shown over the table while editing a comment
 
 	confirm     *deleteConfirm // nil when closed
 	deleteMode  fsops.Mode     // delete_mode, for the confirm text
@@ -191,6 +192,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.edit != nil {
 			return m, m.editKey(msg)
 		}
+		if m.token != nil {
+			return m, m.tokenKey(msg)
+		}
 		if m.zPending {
 			m.zPending = false
 			if binding.Matches(msg, k.Center) {
@@ -315,6 +319,8 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AnalyzeResult:
 		m.analyzed(msg)
 		return m, nil
+	case SaveBeatportTokenResult:
+		return m, m.tokenSaved(msg)
 	case WriteTagsResult:
 		// The new value shows up through the TracksChanged reload.
 		if msg.Err != nil {
@@ -535,6 +541,9 @@ func (m *Library) statusLine() string {
 	}
 	if m.edit != nil {
 		return promptView(m.edit.input, m.width)
+	}
+	if m.token != nil {
+		return promptView(m.token.input, m.width)
 	}
 	if m.status != "" {
 		return errorStyle.Width(m.width).MaxWidth(m.width).Render(m.status)

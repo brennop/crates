@@ -47,8 +47,8 @@ type options struct {
 	PidFile   string        // mpv's pidfile
 	MPVArgs   []string      // extra mpv arguments (tests pass --ao=null)
 	Music     music.Service // nil: built from the config
-	// BeatportTokenFile is the Beatport token the analysis panel refreshes
-	// and saves; "" leaves only $BEATPORT_TOKEN.
+	// BeatportTokenFile is where the analysis panel saves and refreshes
+	// the Beatport token; "" saves none.
 	BeatportTokenFile string
 }
 
@@ -124,7 +124,7 @@ func build(cfg config.Config, o options) (*app.App, *events.Bus, error) {
 		},
 		Bus:      bus,
 		Settings: cfg,
-		Analyzer: analysis.New(analysis.Options{BeatportToken: os.Getenv("BEATPORT_TOKEN"), BeatportTokenFile: o.BeatportTokenFile}),
+		Analyzer: analysis.New(analysis.Options{BeatportTokenFile: o.BeatportTokenFile}),
 	})
 	if err != nil {
 		return nil, nil, err // New closed the pieces
