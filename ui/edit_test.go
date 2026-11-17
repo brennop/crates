@@ -219,20 +219,7 @@ func TestEditCommentShowsTags(t *testing.T) {
 	feed(t, m, key("esc"))
 	DefaultTags = ""
 	feed(t, m, key("c"))
-	if m.edit == nil || m.edit.vocab != nil {
+	if m.edit == nil || m.edit.vocab != "" {
 		t.Fatalf("no file, no default: edit %+v", m.edit)
-	}
-}
-
-func TestParseTags(t *testing.T) {
-	got := parseTags("intro\n# A\n\nx, y\nz\n## B\nw\n")
-	want := []tagSection{{"", "intro"}, {"A", "x, y z"}, {"B", "w"}}
-	if len(got) != len(want) {
-		t.Fatalf("got %+v", got)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("section %d: %+v, want %+v", i, got[i], want[i])
-		}
 	}
 }

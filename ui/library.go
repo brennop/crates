@@ -504,8 +504,8 @@ func (m *Library) View() tea.View {
 	title += statusStyle.Render("sorted by " + sortOrders[m.sortBy].name + " · s to change")
 	title = ansi.Truncate(title, m.width, "…")
 	content := lipgloss.JoinVertical(lipgloss.Left, title, m.table.View(), m.statusLine())
-	if m.edit != nil && len(m.edit.vocab) > 0 {
-		content = overlayBottom(content, tagsPanel(m.edit.vocab, m.width), m.height)
+	if m.edit != nil && strings.TrimSpace(m.edit.vocab) != "" {
+		content = overlayBottom(content, m.edit.tagsPanel(m.width), m.height)
 	}
 	if m.dialog != nil {
 		content = overlay(content, m.dialog.view(m.width, m.height, m.spinner.View()), m.width, m.height)

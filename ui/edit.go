@@ -31,7 +31,10 @@ type editPrompt struct {
 	field editField
 	input textinput.Model
 	orig  string
-	vocab []tagSection // TAGS.md, for a comment; nil otherwise
+	vocab string // TAGS.md, for a comment; "" otherwise
+
+	vocabBox string // vocab rendered, vocabW wide
+	vocabW   int
 }
 
 // openEdit opens a prompt for f on the selected track, prefilled with its
