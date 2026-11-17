@@ -1,6 +1,7 @@
 package ui
 
 import (
+	binding "charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
@@ -65,11 +66,11 @@ func (m *Library) openEdit(f editField) {
 // the tag.
 func (m *Library) editKey(msg tea.KeyPressMsg) tea.Cmd {
 	e := m.edit
-	switch msg.String() {
-	case "esc":
+	switch {
+	case binding.Matches(msg, promptKeys.Cancel):
 		m.edit = nil
 		return nil
-	case "enter":
+	case binding.Matches(msg, promptKeys.Accept):
 		m.edit = nil
 		v := e.input.Value()
 		if v == e.orig {
@@ -77,7 +78,7 @@ func (m *Library) editKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		change := model.FrameChange{Name: e.field.frame, Value: v}
 		return WriteTags(m.ctx, m.app, []model.TrackID{e.id}, []model.FrameChange{change})
-	case "backspace":
+	case binding.Matches(msg, promptKeys.Erase):
 		if e.input.Value() == "" {
 			m.edit = nil
 			return nil

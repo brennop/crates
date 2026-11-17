@@ -4,6 +4,7 @@ import (
 	"strings"
 	"unicode"
 
+	binding "charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
@@ -103,12 +104,12 @@ func (m *Library) openSearch() {
 // (incsearch); enter accepts and plays it, esc puts the cursor back.
 func (m *Library) searchKey(msg tea.KeyPressMsg) tea.Cmd {
 	s := m.search
-	switch msg.String() {
-	case "esc":
+	switch {
+	case binding.Matches(msg, promptKeys.Cancel):
 		m.search = nil
 		m.restore(s)
 		return nil
-	case "enter":
+	case binding.Matches(msg, promptKeys.Accept):
 		m.search = nil
 		pat := s.query()
 		if pat == "" {
@@ -129,7 +130,7 @@ func (m *Library) searchKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.status = ""
 		m.moveFrom(s, row)
 		return m.selectionMoved()
-	case "backspace":
+	case binding.Matches(msg, promptKeys.Erase):
 		if s.query() == "" {
 			m.search = nil
 			m.restore(s)

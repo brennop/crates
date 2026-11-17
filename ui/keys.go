@@ -57,6 +57,14 @@ func libraryHints() []binding.Binding {
 	return []binding.Binding{k.Pause, k.Search, k.Edit, k.Sort, k.Playlists, k.Delete, k.Quit}
 }
 
+// promptKeys end the / search and tag edit prompts; the textinput handles
+// the rest. Erase on an empty line closes the prompt, as in vim.
+var promptKeys = struct{ Accept, Cancel, Erase binding.Binding }{
+	Accept: newBinding("enter", "accept", "enter"),
+	Cancel: newBinding("esc", "cancel", "esc"),
+	Erase:  newBinding("backspace", "erase", "backspace"),
+}
+
 // confirmKeys answer the delete confirm.
 var confirmKeys = struct{ Yes, No binding.Binding }{
 	Yes: newBinding("y", "delete", "y", "enter"),
