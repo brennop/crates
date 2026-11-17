@@ -41,6 +41,9 @@ type Library struct {
 
 	dialog *playlistDialog // nil when closed
 
+	search     *searchPrompt // the / prompt; nil when closed
+	lastSearch string        // the pattern n and N repeat
+
 	confirm     *deleteConfirm // nil when closed
 	deleteMode  fsops.Mode     // delete_mode, for the confirm text
 	afterDelete deletedRow     // where the cursor goes once the deleted row is gone
@@ -156,6 +159,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, m.delete(id)
 		}
+		if m.search != nil {
+			return m, m.searchKey(msg)
+		}
 		switch msg.String() {
 		case "q":
 			return m, tea.Quit
@@ -170,6 +176,13 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.delete(m.selected())
 		case "space":
 			return m, TogglePause(m.ctx, m.app)
+		case "/":
+			m.openSearch()
+			return m, nil
+		case "n":
+			return m, m.searchNext(true)
+		case "N":
+			return m, m.searchNext(false)
 		case "s":
 			m.sortBy = (m.sortBy + 1) % len(sortOrders)
 			m.cols = columns(m.width, sortOrders[m.sortBy].col)
@@ -441,12 +454,15 @@ func (m *Library) View() tea.View {
 }
 
 func (m *Library) statusLine() string {
+	if m.search != nil {
+		return lipgloss.NewStyle().Padding(0, 1).Width(m.width).MaxWidth(m.width).Render("/" + m.search.query + "█")
+	}
 	if m.status != "" {
 		return errorStyle.Width(m.width).MaxWidth(m.width).Render(m.status)
 	}
 	p := m.player
 	if p.Idle || p.TrackID == 0 {
-		return statusStyle.Render("stopped · space pause · s sort · p playlists · x delete · q quit")
+		return statusStyle.Render("stopped · space pause · / search · s sort · p playlists · x delete · q quit")
 	}
 	name := baseName(p.Path)
 	for _, t := range m.tracks {
