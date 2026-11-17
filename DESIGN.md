@@ -14,7 +14,7 @@ The earlier design had fourteen problems, listed most severe first. The first fi
 | 4 | The reconciler could mass-add the whole master dir if path matching is wrong | One normalization function; a safety valve on bulk adds |
 | 5 | A delete that removes the Music entry and then fails on the file loses playlist memberships | Music goes first, so the common failure changes nothing; the rare case is reported in full |
 | 6 | Music cannot look a track up by file path | Bulk snapshot of IDs and locations; `add` is idempotent as a fallback |
-| 7 | The snapshot goes stale when playlists change in Music.app, and Sync Library may alter a playlist after a write | Refresh on focus; mutate by persistent ID; verify after every write |
+| 7 | The snapshot goes stale when playlists change in Music.app, and Music may alter a playlist after a write | Refresh on focus; mutate by persistent ID; verify after every write |
 | 8 | Paths and playlist names interpolated into scripts break on quotes | Arguments by `argv`, results as JSON |
 | 9 | Nothing handled Music not running or a denied automation permission | `Unavailable` state; detect error -1743; `autolaunch` flag |
 | 10 | fsnotify on macOS holds one descriptor per file in a watched directory | Polling sweeps |
@@ -177,7 +177,8 @@ Music is reached only through `osascript`, one script at a time, and every track
 - **Playlists.** Addressed by persistent ID, never by name. Smart playlists and folders are listed with `Editable = false`.
 - **Music not running.** With `autolaunch = false` the client reports `Unavailable`. Adds wait in the reconciler. Playlist edits and master deletes fail with a clear error and an offer to launch Music.
 - **Permission.** macOS attaches the automation permission to the terminal app that runs the binary. After a denial every script fails with error -1743; the app detects that code and points the user to Privacy & Security > Automation ([Scripting OS X](https://scriptingosx.com/2020/09/avoiding-applescript-security-and-privacy-requests/)).
-- **Sync Library risk.** One unanswered developer report describes a playlist with catalog tracks being cut short after a just-added local file was put into it ([Apple Developer Forums](https://developer.apple.com/forums/thread/844902)). The verify-after-write rule above is the mitigation; test this on your own library.
+- **Sync Library.** Off for this library: local files only, no Apple Music subscription. A developer report describes Sync Library cutting a playlist that holds catalog tracks short after a write ([Apple Developer Forums](https://developer.apple.com/forums/thread/844902)); that risk does not apply here. Playlist writes still re-read the whole playlist, which is cheap, and there is no delayed re-check.
+- **Spike findings** ([docs/spike-music.md](docs/spike-music.md)). Music returns locations in NFD, so every path from Music goes through `Normalize` before matching. Adding a track that is already in a playlist adds a second copy, so `AddToPlaylist` skips current members. osascript error messages are localized; match on the error number only (-600 not running, -1728 no such object, -1743 automation denied). Folders are detected by `specialKind = folder`, and `Editable` means not smart and `specialKind = none`. A file track can have no location; the snapshot skips it.
 
 ## Operations
 
@@ -222,7 +223,7 @@ If step 3 fails after step 2 succeeded, the file is still in master, so the reco
 
 ### Playlists
 
-Add or remove by `MusicID` and playlist ID, verify, patch the snapshot, emit `PlaylistsChanged`. Offered only for tracks with a `MusicID` and playlists with `Editable = true`.
+Add or remove by `MusicID` and playlist ID (adds skip tracks already in the playlist, since Music would add a second copy), verify, patch the snapshot, emit `PlaylistsChanged`. Offered only for tracks with a `MusicID` and playlists with `Editable = true`.
 
 ### Reconcile
 
@@ -251,7 +252,7 @@ The core knows nothing about Bubble Tea. It exposes methods and one event channe
 
 Prototype the Music scripts first: they are the only part that can invalidate the design.
 
-1. **Music spike, scripts only.** On the real library: time the bulk snapshot; `add` and read back the location with the copy setting off and on; confirm deleting an entry leaves the file; confirm `refresh` picks up a tag edit; rename a different file over an added track's path and confirm its persistent ID and playlists survive (for overwrite); add and remove a playlist entry by persistent ID; repeat the playlist test with Sync Library on.
+1. **Music spike, scripts only.** On the real library: time the bulk snapshot; `add` and read back the location with the copy setting off and on; confirm deleting an entry leaves the file; confirm `refresh` picks up a tag edit; rename a different file over an added track's path and confirm its persistent ID and playlists survive (for overwrite); add and remove a playlist entry by persistent ID. Done; see [docs/spike-music.md](docs/spike-music.md).
 2. **`fsops`.** No-clobber move, cross-volume copy, trash. Test names that differ only by case.
 3. **`library`.** Index, cache, sweep, events. Test against a generated directory of several thousand files.
 4. **`tags`.** Summary reader, kid3 JSON read and write.
@@ -268,5 +269,5 @@ Ask. The answers are skip or overwrite.
 
 - [x] Is Sync Library on for this library? It decides how much of the playlist verification matters.
 
-Sync Library is On\
+Off. The library has local files only and no Apple Music subscription (corrected after the spike).
 
