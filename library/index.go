@@ -2,8 +2,12 @@ package library
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/text/unicode/norm"
 
 	"github.com/brennop/crates/model"
 	"github.com/brennop/crates/pathnorm"
@@ -150,6 +154,39 @@ func (x *index) setDuration(id model.TrackID, d time.Duration) (model.Track, boo
 	t.Duration = d
 	x.tracks[id] = t
 	return t, true, nil
+}
+
+// setMusicID sets the Music persistent ID of track id. It reports whether it
+// changed.
+func (x *index) setMusicID(id model.TrackID, musicID string) (model.Track, bool, error) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	t, ok := x.tracks[id]
+	if !ok {
+		return model.Track{}, false, ErrUnknownTrack
+	}
+	if t.MusicID == musicID {
+		return t, false, nil
+	}
+	t.MusicID = musicID
+	x.tracks[id] = t
+	return t, true, nil
+}
+
+// findName returns a track under r whose base name equals name, ignoring
+// case. Names are compared in NFC, as paths are stored.
+func (x *index) findName(r *root, name string) (model.Track, bool) {
+	name = norm.NFC.String(name)
+	x.mu.RLock()
+	defer x.mu.RUnlock()
+	for _, t := range x.tracks {
+		if strings.EqualFold(filepath.Base(t.Path), name) {
+			if got, ok := x.rootFor(t.Path); ok && got == r {
+				return t, true
+			}
+		}
+	}
+	return model.Track{}, false
 }
 
 func (x *index) byKey(key string) (model.Track, bool) {

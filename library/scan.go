@@ -129,8 +129,10 @@ func (l *Library) scanRoot(ctx context.Context, r *root) error {
 	if _, err := os.Stat(r.dir); err != nil {
 		return err
 	}
+	l.fsMu.Lock()
 	files, complete, err := listRoot(r)
 	if err != nil {
+		l.fsMu.Unlock()
 		return err
 	}
 
@@ -163,6 +165,7 @@ func (l *Library) scanRoot(ctx context.Context, r *root) error {
 	total := len(files)
 	resolved := total - len(jobs)
 	l.commit(moved)
+	l.fsMu.Unlock()
 	l.progress(resolved, total, false)
 
 	results := l.readAll(ctx, jobs)
@@ -180,27 +183,28 @@ func (l *Library) scanRoot(ctx context.Context, r *root) error {
 			batch = append(batch, t)
 			resolved++
 			if len(batch) >= batchMax {
-				l.commit(batch)
+				l.commitRead(batch)
 				batch = batch[:0]
 				l.progress(resolved, total, false)
 			}
 		case <-tick.C:
 			if len(batch) > 0 {
-				l.commit(batch)
+				l.commitRead(batch)
 				batch = batch[:0]
 				l.progress(resolved, total, false)
 			}
 		}
 	}
-	l.commit(batch)
+	l.commitRead(batch)
 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if complete {
+		l.fsMu.Lock()
 		var gone []model.TrackID
 		for _, t := range l.idx.under(r) {
-			if _, ok := seen[pathnorm.Key(t.Path, r.caseSensitive)]; !ok {
+			if _, ok := seen[pathnorm.Key(t.Path, r.caseSensitive)]; !ok && vanished(t.Path) {
 				gone = append(gone, t.ID)
 			}
 		}
@@ -210,6 +214,7 @@ func (l *Library) scanRoot(ctx context.Context, r *root) error {
 			}
 			l.sink.Publish(events.TrackRemoved{IDs: removed})
 		}
+		l.fsMu.Unlock()
 	}
 	l.progress(total, total, true)
 	return nil
@@ -259,6 +264,29 @@ func (l *Library) readOne(f file) model.Track {
 	t.Summary = s
 	t.Duration = d
 	return t
+}
+
+// commitRead commits tracks read outside fsMu. A file that vanished since
+// it was listed (promoted, say) is dropped, or it would come back as a new
+// track at its old path.
+func (l *Library) commitRead(ts []model.Track) {
+	l.fsMu.Lock()
+	defer l.fsMu.Unlock()
+	kept := ts[:0:0]
+	for _, t := range ts {
+		if !vanished(t.Path) {
+			kept = append(kept, t)
+		}
+	}
+	l.commit(kept)
+}
+
+// vanished reports whether path is gone from disk. A sweep that listed a
+// root before a promote landed in it would otherwise remove the promoted
+// track.
+func vanished(path string) bool {
+	_, err := os.Stat(path)
+	return errors.Is(err, fs.ErrNotExist)
 }
 
 // commit stores tracks in the index and the cache and publishes the ones

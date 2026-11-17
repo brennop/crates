@@ -46,6 +46,10 @@ type Library struct {
 
 	wake chan struct{} // buffered 1: a master sweep was requested
 
+	// fsMu is held by a sweep while it lists and classifies files, while it
+	// commits, and while it removes vanished tracks; and by Exclusive.
+	fsMu sync.Mutex
+
 	mu      sync.Mutex // guards the fields below
 	started bool
 	closed  bool
@@ -198,4 +202,55 @@ func (l *Library) Remove(ids ...model.TrackID) error {
 	}
 	l.sink.Publish(events.TrackRemoved{IDs: removed})
 	return nil
+}
+
+// Upsert stores t, which must sit under a root. A zero ID takes the ID of the
+// track already at t's path, or a new one. The role comes from the root and
+// the MusicID is kept from the stored track. It publishes TracksChanged when
+// anything changed, and returns the stored track.
+func (l *Library) Upsert(t model.Track) (model.Track, error) {
+	p, err := pathnorm.Normalize(t.Path)
+	if err != nil {
+		return model.Track{}, err
+	}
+	t.Path = p
+	stored, changed, err := l.idx.upsert(t)
+	if err != nil || !changed {
+		return stored, err
+	}
+	if err := l.cache.write([]model.Track{stored}, nil); err != nil {
+		return stored, err
+	}
+	l.sink.Publish(events.TracksChanged{Tracks: []model.Track{stored}})
+	return stored, nil
+}
+
+// SetMusicID sets or clears ("") the Music persistent ID of track id and
+// publishes TracksChanged when it changed. The cache does not store it.
+func (l *Library) SetMusicID(id model.TrackID, musicID string) error {
+	t, changed, err := l.idx.setMusicID(id, musicID)
+	if err != nil || !changed {
+		return err
+	}
+	l.sink.Publish(events.TracksChanged{Tracks: []model.Track{t}})
+	return nil
+}
+
+// MasterDir returns the normalized master dir.
+func (l *Library) MasterDir() string { return l.roots[0].dir }
+
+// FindMaster returns the master track whose file name equals name, ignoring
+// case, whatever the master volume's case sensitivity.
+func (l *Library) FindMaster(name string) (model.Track, bool) {
+	return l.idx.findName(l.roots[0], name)
+}
+
+// Exclusive runs fn while no sweep is reading the disk or changing the index
+// from what it read. Callers that move or replace a file and then update the
+// index (promote, overwrite) do both inside fn, so a sweep never sees the
+// file moved but the index not yet updated. fn must not call SweepMaster.
+func (l *Library) Exclusive(fn func() error) error {
+	l.fsMu.Lock()
+	defer l.fsMu.Unlock()
+	return fn()
 }
