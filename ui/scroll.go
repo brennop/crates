@@ -51,7 +51,7 @@ func (m *Library) scroll() {
 }
 
 // wheelRows is how far one notch of the mouse wheel scrolls.
-const wheelRows = 3
+const wheelRows = 1
 
 // scrollBy scrolls the view n rows without moving the cursor, so nothing
 // new plays. The cursor may end up off screen; the next movement key

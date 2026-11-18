@@ -1,23 +1,12 @@
-# Position
+**Position** Start, Build, Peak, Sustain, Release, After Hours
 
-Start, Build, Peak, Sustain, Release, After Hours
+**Mood**     Bright, Dreamy, Dark, Sad, Sensual, Weird, Silly
 
-# Mood
+**Groove**   Groovy, Bouncy, Swung, Break, Galloping, Housy
 
-Bright, Dreamy, Dark, Sad, Sensual, Weird, Silly
+**Style**    Funky, Soulful, Latin, Tropical, Frenchy, Jazzy, Acid, Organic
 
-# Groove
+**Vocals**   Instrumental, Vocal, Anthem
 
-Groovy, Bouncy, Swung, Break, Galloping, Housy
+**Timbre**   Bass Heavy, Melodic, Horns, Organ, Strings, Piano, Synth, Atabaque
 
-# Style
-
-Funky, Soulful, Latin, Tropical, Frenchy, Jazzy, Acid, Organic
-
-# Vocals
-
-Instrumental, Vocal, Anthem
-
-# Timbre
-
-Bass Heavy, Melodic, Horns, Organ, Strings, Piano, Synth, Atabaque
