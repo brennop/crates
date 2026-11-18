@@ -105,7 +105,7 @@ func (m *Library) pianoStartedMsg(msg pianoStarted) {
 }
 
 // pianoKey handles a key press while the piano is open. Space still pauses
-// the track; other keys do nothing.
+// the track and m toggles the analysis panel; other keys do nothing.
 func (m *Library) pianoKey(msg tea.KeyPressMsg) tea.Cmd {
 	p := m.piano
 	switch {
@@ -120,6 +120,8 @@ func (m *Library) pianoKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case binding.Matches(msg, libraryKeys.Pause):
 		return TogglePause(m.ctx, m.app)
+	case binding.Matches(msg, libraryKeys.Analyze):
+		return m.toggleAnalysis()
 	}
 	for _, n := range pianoNotes {
 		if binding.Matches(msg, n.key) {

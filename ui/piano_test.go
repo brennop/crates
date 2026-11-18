@@ -72,6 +72,20 @@ func TestPianoPlaysAndCloses(t *testing.T) {
 		t.Fatal("piano keys reached the library")
 	}
 
+	// m works over the piano. Update alone: running the commands would
+	// start the real analysis scripts.
+	if err := m.app.SaveBeatportToken("tok"); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(key("m"))
+	if m.analysis == nil || m.piano == nil {
+		t.Fatal("m did not open the analysis panel with the piano open")
+	}
+	m.Update(key("m"))
+	if m.analysis != nil {
+		t.Fatal("m did not close the analysis panel")
+	}
+
 	m.Update(key("v"))
 	if m.piano != nil || fs.started {
 		t.Fatal("v did not close the piano and stop the audio")
