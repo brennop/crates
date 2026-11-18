@@ -299,12 +299,12 @@ func TestEditKeySuggestsAnalysis(t *testing.T) {
 	id := m.tracks[0].ID
 	feed(t, m, AnalyzeResult{ID: id, Result: analysis.Result{Job: analysis.SKey, Keys: []analysis.KeyGuess{{Key: "F# minor"}}}})
 	feed(t, m, AnalyzeResult{ID: id, Result: analysis.Result{Job: analysis.Beatport, Keys: []analysis.KeyGuess{{Key: "F# Minor"}, {Key: "A Major"}}}})
-	if got := m.keyGuesses[id]; len(got) != 4 { // F# minor, 11A, A Major, 11B
+	if got := m.keyGuesses[id]; len(got) != 2 || got[0] != "11A" || got[1] != "11B" {
 		t.Fatalf("guesses %q", got)
 	}
 	feed(t, m, key("e"))
-	typeText(t, m, "a")
-	if got := m.edit.input.CurrentSuggestion(); got != "A Major" {
+	typeText(t, m, "1")
+	if got := m.edit.input.CurrentSuggestion(); got != "11A" {
 		t.Errorf("suggestion %q", got)
 	}
 	feed(t, m, ctrlU)
