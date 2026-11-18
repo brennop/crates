@@ -16,10 +16,13 @@ import (
 
 // playlistDialog lists Music's editable playlists with a checkbox each for
 // one track. Toggling a box adds the track to that playlist or removes it.
+// For an inbox track (promote set) toggling writes nothing: the boxes are
+// the playlists to add the track to once closing promotes it (see chosen).
 // The rows are a list.Model, which brings paging and / to filter by name.
 type playlistDialog struct {
-	id   model.TrackID
-	name string // "artist – title", for the box title
+	id      model.TrackID
+	name    string // "artist – title", for the box title
+	promote bool   // an inbox track: boxes are only collected
 
 	loading bool
 	gen     uint64 // latest load; older results are dropped
@@ -131,7 +134,9 @@ func (d *playlistDialog) loaded(msg playlistDialogLoaded) tea.Cmd {
 	for pid := range d.busy {
 		member[pid] = d.member[pid]
 	}
-	d.member = member
+	if !d.promote { // an inbox track's boxes are the user's picks
+		d.member = member
+	}
 	cmd := d.list.SetItems(editable)
 	if n := len(d.list.VisibleItems()); d.list.Index() >= n {
 		d.list.Select(max(n-1, 0))
@@ -174,6 +179,9 @@ func (d *playlistDialog) toggle(ctx context.Context, a *app.App) tea.Cmd {
 	}
 	add := !d.member[pid]
 	d.member[pid] = add
+	if d.promote {
+		return nil
+	}
 	d.busy[pid] = true
 	d.err = ""
 	ids := []model.TrackID{d.id}
@@ -181,6 +189,17 @@ func (d *playlistDialog) toggle(ctx context.Context, a *app.App) tea.Cmd {
 		return AddToPlaylist(ctx, a, ids, pid)
 	}
 	return RemoveFromPlaylist(ctx, a, ids, pid)
+}
+
+// chosen lists the checked playlists, in list order.
+func (d *playlistDialog) chosen() []string {
+	var pids []string
+	for _, it := range d.list.Items() {
+		if p, ok := it.(playlistItem); ok && d.member[p.ID] {
+			pids = append(pids, p.ID)
+		}
+	}
+	return pids
 }
 
 // done applies a write's result. It reports false when the dialog was not
@@ -202,7 +221,7 @@ func (d *playlistDialog) done(ids []model.TrackID, pid string, add bool, err err
 // every change to the screen size, the rows, the filter or the error line.
 func (d *playlistDialog) layout(width, height int) {
 	items := d.list.Items()
-	inner := lipgloss.Width(d.title())
+	inner := max(lipgloss.Width(d.title()), lipgloss.Width(hints(0, d.hints()...)))
 	for _, it := range items {
 		inner = max(inner, lipgloss.Width("[x] "+it.FilterValue()))
 	}
@@ -263,5 +282,9 @@ func (d *playlistDialog) hints() []binding.Binding {
 		close.SetHelp("q", "close")
 		return []binding.Binding{dialogKeys.Toggle, clear, close}
 	}
-	return []binding.Binding{dialogKeys.Toggle, lk.Filter, dialogKeys.Close}
+	close := dialogKeys.Close
+	if d.promote && len(d.chosen()) > 0 {
+		close.SetHelp("esc", "promote")
+	}
+	return []binding.Binding{dialogKeys.Toggle, lk.Filter, close}
 }

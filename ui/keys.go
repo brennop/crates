@@ -56,12 +56,12 @@ var libraryKeys = struct {
 	Edit: newBinding("c/a/t/e/ge", "edit", "c", "a", "t", "e"),
 }
 
-// libraryHints are the keys the idle status line lists. The inbox view
-// trades playlists for promote, since inbox tracks are not in Music.
+// libraryHints are the keys the idle status line lists, with promote in
+// the inbox view.
 func libraryHints(inbox bool) []binding.Binding {
 	k := libraryKeys
 	if inbox {
-		return []binding.Binding{k.Pause, k.Search, k.Edit, k.Sort, k.Inbox, k.Promote, k.Analyze, k.Delete, k.Quit}
+		return []binding.Binding{k.Pause, k.Search, k.Edit, k.Sort, k.Inbox, k.Promote, k.Playlists, k.Analyze, k.Delete, k.Quit}
 	}
 	return []binding.Binding{k.Pause, k.Search, k.Edit, k.Sort, k.Inbox, k.Playlists, k.Analyze, k.Delete, k.Quit}
 }

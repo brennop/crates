@@ -51,6 +51,10 @@ type Library struct {
 
 	dialog *playlistDialog // nil when closed
 
+	// toPlaylists holds the playlists a promoted track goes into once the
+	// reconciler has added it to Music and it has a Music ID.
+	toPlaylists map[model.TrackID][]string
+
 	analysis *analysisPanel // nil when closed; see analysis.go
 
 	search     *searchPrompt // the / prompt; nil when closed
@@ -188,7 +192,11 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.dialog != nil {
 			closed, cmd := m.dialog.update(m.ctx, m.app, msg)
 			if closed {
+				d := m.dialog
 				m.dialog = nil
+				if pids := d.chosen(); d.promote && len(pids) > 0 {
+					return m, tea.Batch(cmd, m.promoteTo(d.id, pids))
+				}
 			}
 			return m, cmd
 		}
@@ -417,7 +425,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Library) handleEvent(e events.Event) tea.Cmd {
 	switch e := e.(type) {
-	case events.LibraryLoaded, events.TracksChanged, events.TrackRemoved:
+	case events.TracksChanged:
+		return tea.Batch(m.load(), m.addPromoted(e.Tracks))
+	case events.LibraryLoaded, events.TrackRemoved:
 		return m.load()
 	case events.ScanProgress:
 		m.scan = e
@@ -447,11 +457,12 @@ func (m *Library) openDialog() tea.Cmd {
 		return nil
 	}
 	t := m.tracks[i]
-	if t.MusicID == "" {
+	if t.MusicID == "" && t.Role != model.Inbox {
 		m.status = "playlists: track is not in Music yet"
 		return nil
 	}
 	m.dialog = newPlaylistDialog(t)
+	m.dialog.promote = t.Role == model.Inbox
 	m.dialog.layout(m.width, m.height)
 	return tea.Batch(m.dialog.load(m.app), m.spin())
 }
@@ -481,9 +492,43 @@ func (m *Library) promote(id model.TrackID) tea.Cmd {
 	return Promote(m.ctx, m.app, []model.TrackID{id})
 }
 
+// promoteTo promotes track id and, once it is in Music, adds it to the
+// playlists pids.
+func (m *Library) promoteTo(id model.TrackID, pids []string) tea.Cmd {
+	if m.toPlaylists == nil {
+		m.toPlaylists = map[model.TrackID][]string{}
+	}
+	m.toPlaylists[id] = pids
+	return m.promote(id)
+}
+
+// addPromoted adds the tracks in ts that promoteTo is waiting on, and that
+// now have a Music ID, to their playlists.
+func (m *Library) addPromoted(ts []model.Track) tea.Cmd {
+	var cmds []tea.Cmd
+	for _, t := range ts {
+		pids, ok := m.toPlaylists[t.ID]
+		if !ok || t.MusicID == "" || t.Role != model.Master {
+			continue
+		}
+		delete(m.toPlaylists, t.ID)
+		for _, pid := range pids {
+			cmds = append(cmds, AddToPlaylist(m.ctx, m.app, []model.TrackID{t.ID}, pid))
+		}
+	}
+	return tea.Batch(cmds...)
+}
+
 // promoted reports a promote's collision or failure in the status line. The
-// row itself goes away through the TracksChanged event's reload.
+// row itself goes away through the TracksChanged event's reload. A track
+// that was not promoted goes into no playlist.
 func (m *Library) promoted(sum app.PromoteSummary) {
+	for _, c := range sum.Collisions {
+		delete(m.toPlaylists, c.Inbox)
+	}
+	for _, f := range sum.Failures {
+		delete(m.toPlaylists, f.ID)
+	}
 	switch {
 	case len(sum.Collisions) > 0:
 		m.status = "promote: " + model.ErrCollision{Name: sum.Collisions[0].Name, Existing: sum.Collisions[0].Existing}.Error()

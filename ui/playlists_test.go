@@ -212,3 +212,62 @@ func TestPlaylistDialogEmpty(t *testing.T) {
 		t.Errorf("view:\n%s", v)
 	}
 }
+
+func TestPlaylistDialogPromotesInboxTrack(t *testing.T) {
+	e := newEnv(t)
+	e.music.AddPlaylist(model.Playlist{ID: "p1", Name: "Warmup", Editable: true})
+	e.music.AddPlaylist(model.Playlist{ID: "p2", Name: "Peak", Editable: true})
+	noErr(t, "refresh", run[RefreshResult](t, Refresh(e.ctx, e.app)).Err)
+	c := e.file(e.inbox, "c.mp3")
+	m := libraryWith(t, e)
+	feed(t, m, key("i"))
+	reload(t, m)
+
+	loaded, ok := find[playlistDialogLoaded](feed(t, m, key("p")))
+	if m.dialog == nil || !ok {
+		t.Fatal("p did not open the dialog on an inbox track")
+	}
+	feed(t, m, loaded)
+	feed(t, m, key("down")) // Peak
+	if msgs := feed(t, m, key("space")); len(msgs) != 0 {
+		t.Fatalf("toggle on an inbox track wrote: %v", msgs)
+	}
+	if !strings.Contains(m.View().Content, "esc promote") {
+		t.Errorf("hints do not say esc promotes:\n%s", m.View().Content)
+	}
+	// A playlist reload keeps the pick.
+	feed(t, m, find2[playlistDialogLoaded](t, exec(m.dialog.load(e.app))))
+
+	res, ok := find[PromoteResult](feed(t, m, key("esc")))
+	if m.dialog != nil || !ok || !slices.Equal(res.Summary.Promoted, []model.TrackID{c.ID}) {
+		t.Fatalf("esc: dialog %v, promote %+v", m.dialog, res)
+	}
+	feed(t, m, res)
+
+	// The reconciler (not running here) adds the track to Music; the
+	// TracksChanged that carries its Music ID sends the playlist add.
+	if msgs := exec(m.handleEvent(events.TracksChanged{Tracks: e.app.Tracks([]model.TrackID{c.ID})})); len(msgs) != 1 {
+		t.Fatalf("before the Music ID: %v, want only the reload", msgs)
+	}
+	tr := e.inMusic(e.app.Tracks([]model.TrackID{c.ID})[0])
+	add, ok := find[AddToPlaylistResult](exec(m.handleEvent(events.TracksChanged{Tracks: []model.Track{tr}})))
+	if !ok || add.Err != nil || add.PlaylistID != "p2" {
+		t.Fatalf("add = %+v, %v", add, ok)
+	}
+	if !slices.Equal(e.music.Members("p2"), []string{tr.MusicID}) || len(e.music.Members("p1")) != 0 {
+		t.Errorf("members p1 %v, p2 %v", e.music.Members("p1"), e.music.Members("p2"))
+	}
+	// A second TracksChanged adds nothing again.
+	if _, ok := find[AddToPlaylistResult](exec(m.handleEvent(events.TracksChanged{Tracks: []model.Track{tr}}))); ok {
+		t.Error("added twice")
+	}
+}
+
+func find2[T any](t *testing.T, msgs []tea.Msg) T {
+	t.Helper()
+	v, ok := find[T](msgs)
+	if !ok {
+		t.Fatalf("no %T in %v", v, msgs)
+	}
+	return v
+}
