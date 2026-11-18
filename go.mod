@@ -1,19 +1,20 @@
 module github.com/brennop/crates
 
-go 1.26.0
+go 1.26.8
 
 require (
-	charm.land/bubbles/v2 v2.0.0
+	charm.land/bubbles/v2 v2.2.1
 	charm.land/bubbletea/v2 v2.1.1
 	charm.land/glamour/v2 v2.0.1
-	charm.land/lipgloss/v2 v2.0.4
+	charm.land/lipgloss/v2 v2.0.6
 	codeberg.org/derat/mpeg v0.0.0-20260508234456-e65f288d7f2e
 	github.com/BurntSushi/toml v1.4.0
+	github.com/NimbleMarkets/ntcharts/v2 v2.9.0
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/lrstanley/bubblezone/v2 v2.0.1
 	github.com/lucasb-eyer/go-colorful v1.4.1
-	golang.org/x/text v0.24.0
+	golang.org/x/text v0.43.0
 	modernc.org/sqlite v1.44.3
 )
 
@@ -42,11 +43,12 @@ require (
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/sahilm/fuzzy v0.1.1 // indirect
+	github.com/sahilm/fuzzy v0.1.3 // indirect
 	github.com/xo/terminfo v1.3.1 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
 	github.com/yuin/goldmark-emoji v1.0.5 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
+	golang.org/x/image v0.47.0 // indirect
 	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect

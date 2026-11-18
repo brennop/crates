@@ -33,10 +33,11 @@ const (
 	SKey                   // key, Deezer's S-KEY model
 	EssentiaKey            // key, Essentia's KeyExtractor with its EDM profiles
 	Beatport               // BPM and key from Beatport's catalog
+	Spectrogram            // a picture of the spectrum over time, by ffmpeg
 )
 
 // Jobs lists every job, in the order a panel shows them.
-var Jobs = []Job{BPM, SKey, EssentiaKey, Beatport}
+var Jobs = []Job{BPM, SKey, EssentiaKey, Beatport, Spectrogram}
 
 func (j Job) String() string {
 	switch j {
@@ -48,6 +49,8 @@ func (j Job) String() string {
 		return "Key · Essentia"
 	case Beatport:
 		return "Beatport"
+	case Spectrogram:
+		return "Spectrogram"
 	}
 	return fmt.Sprintf("Job(%d)", int(j))
 }
@@ -74,13 +77,14 @@ type Result struct {
 	Confidence float64 // Essentia's beat confidence, 0–5.32
 	Keys       []KeyGuess
 	Match      string // Beatport: "artists – title (mix)" of the matched track
+	PNG        []byte // Spectrogram: the picture, time left to right, 0 Hz at the bottom
 	Err        error
 }
 
 // Track is what a job needs to know about a track.
 type Track struct {
 	Path, Artist, Title string
-	Duration            time.Duration // 0: unknown; picks among a song's versions on Beatport
+	Duration            time.Duration // 0: unknown; over MaxDuration: refused; picks among a song's versions on Beatport
 }
 
 // Options configure an Analyzer.
@@ -101,6 +105,14 @@ var ErrNoBeatportToken = errors.New("no Beatport token")
 // ErrBeatportRefused: Beatport refused the token, and refreshing it did not
 // help (or was refused too). A new one has to be saved.
 var ErrBeatportRefused = errors.New("Beatport refused the token")
+
+// MaxDuration is the longest track analyzed. Longer ones (mixes) are
+// refused with ErrTooLong, so no job's memory grows past what a track of
+// this length needs.
+const MaxDuration = 13 * time.Minute
+
+// ErrTooLong: the track is longer than MaxDuration.
+var ErrTooLong = fmt.Errorf("not analyzed: longer than %d minutes", int(MaxDuration.Minutes()))
 
 // ErrNoUV: uv is not on PATH, so the audio jobs cannot run.
 var ErrNoUV = errors.New("uv not found on PATH: install it (brew install uv)")
@@ -133,6 +145,10 @@ func New(o Options) *Analyzer {
 // Run runs job on t. Cancelling ctx kills a script in flight.
 func (a *Analyzer) Run(ctx context.Context, job Job, t Track) Result {
 	r := Result{Job: job}
+	if t.Duration > MaxDuration {
+		r.Err = ErrTooLong
+		return r
+	}
 	switch job {
 	case BPM:
 		var out struct{ BPM, Confidence float64 }
@@ -158,6 +174,8 @@ func (a *Analyzer) Run(ctx context.Context, job Job, t Track) Result {
 	case Beatport:
 		r = a.beatport(ctx, t)
 		r.Job = job
+	case Spectrogram:
+		r.PNG, r.Err = spectrogram(ctx, t.Path)
 	default:
 		r.Err = fmt.Errorf("analysis: unknown job %d", job)
 	}

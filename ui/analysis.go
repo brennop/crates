@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"image/png"
 	"strings"
 
 	binding "charm.land/bubbles/v2/key"
@@ -11,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+	"github.com/NimbleMarkets/ntcharts/v2/picture"
 
 	"github.com/brennop/crates/analysis"
 	"github.com/brennop/crates/model"
@@ -43,7 +46,19 @@ var analysisClose = newBinding("m", "close", "m")
 const (
 	analysisInner = 54 // inner width of the box, on a wide enough screen
 	analysisLabel = 16 // width of the job column
+	spectrumRows  = 8  // height of the spectrogram, in lines
 )
+
+// newSpectrum returns the picture the spectrogram is drawn in. FitFill
+// stretches it to the box's width.
+func newSpectrum() picture.Model {
+	return picture.NewWithConfig(picture.Config{Fit: picture.FitFill})
+}
+
+// analysisWidth is the box's inner width on a screen width wide.
+func analysisWidth(width int) int {
+	return min(analysisInner, max(width-dialogChrome, 20))
+}
 
 // toggleAnalysis closes the panel, or opens it on the selected track and
 // starts the jobs.
@@ -51,7 +66,7 @@ func (m *Library) toggleAnalysis() tea.Cmd {
 	if m.analysis != nil {
 		m.analysis.cancel()
 		m.analysis = nil
-		return nil
+		return m.spectrum.SetImage(nil)
 	}
 	if !m.app.HasBeatportToken() {
 		m.openTokenPrompt()
@@ -77,14 +92,42 @@ func (m *Library) openAnalysis() tea.Cmd {
 }
 
 // analyzed records a job's result, if the panel is still open on its track,
-// and asks for a new token when Beatport refused the saved one.
-func (m *Library) analyzed(msg AnalyzeResult) {
-	if p := m.analysis; p != nil && p.track.ID == msg.ID {
-		p.results[msg.Result.Job] = msg.Result
-		if errors.Is(msg.Result.Err, analysis.ErrBeatportRefused) && m.search == nil && m.edit == nil {
-			m.openTokenPrompt()
+// asks for a new token when Beatport refused the saved one, and shows the
+// spectrogram.
+func (m *Library) analyzed(msg AnalyzeResult) tea.Cmd {
+	p := m.analysis
+	if p == nil || p.track.ID != msg.ID {
+		return nil
+	}
+	r := msg.Result
+	var cmd tea.Cmd
+	if r.Job == analysis.Spectrogram && r.Err == nil {
+		img, err := png.Decode(bytes.NewReader(r.PNG))
+		if err != nil {
+			r.Err = fmt.Errorf("spectrogram: %w", err)
+		} else {
+			cmd = tea.Batch(m.spectrum.SetImage(img), m.sizeSpectrum(), m.kittyOn())
 		}
 	}
+	p.results[r.Job] = r
+	if errors.Is(r.Err, analysis.ErrBeatportRefused) && m.search == nil && m.edit == nil {
+		m.openTokenPrompt()
+	}
+	return cmd
+}
+
+// sizeSpectrum fits the spectrogram to the box's width.
+func (m *Library) sizeSpectrum() tea.Cmd {
+	return m.spectrum.SetSize(analysisWidth(m.width), spectrumRows)
+}
+
+// kittyOn switches the spectrogram to Kitty graphics once the terminal has
+// said it supports them. Until then, or without them, it is half-blocks.
+func (m *Library) kittyOn() tea.Cmd {
+	if m.spectrum.Mode() == picture.PictureGlyph && picture.KittySupported() == picture.KittyCapabilitySupported {
+		return m.spectrum.Toggle()
+	}
+	return nil
 }
 
 // openTokenPrompt asks for a Beatport token in the status line.
@@ -142,13 +185,17 @@ func (p *analysisPanel) pending() bool {
 	return p != nil && len(p.results) < len(analysis.Jobs)
 }
 
-// view renders the box for a screen width wide.
-func (p *analysisPanel) view(width int, spin string) string {
-	inner := min(analysisInner, max(width-dialogChrome, 20))
+// view renders the box for a screen width wide, with the spectrogram's
+// picture under the rows once it has come.
+func (p *analysisPanel) view(width int, spin, spectrum string) string {
+	inner := analysisWidth(width)
 	valueW := max(inner-analysisLabel, 5)
 	var rows [][]string
 	for _, job := range analysis.Jobs {
 		r, ok := p.results[job]
+		if job == analysis.Spectrogram && ok && r.Err == nil {
+			continue // drawn below the rows
+		}
 		var lines []string
 		switch {
 		case !ok:
@@ -178,6 +225,10 @@ func (p *analysisPanel) view(width int, spin string) string {
 		Width(inner).
 		Rows(rows...)
 	body := strings.Split(t.Render(), "\n")
+	if r, ok := p.results[analysis.Spectrogram]; ok && r.Err == nil && spectrum != "" {
+		body = append(body, "")
+		body = append(body, strings.Split(spectrum, "\n")...)
+	}
 	return dialogBox(inner, "Analysis · "+trackName(p.track), body, analysisClose)
 }
 

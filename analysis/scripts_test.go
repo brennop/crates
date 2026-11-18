@@ -28,13 +28,20 @@ func TestScripts(t *testing.T) {
 	a := New(Options{ScriptDir: dir})
 	stop := make(chan struct{})
 	peak := make(chan int64)
-	go func() { peak <- samplePeak(dir, stop) }()
+	go func() { peak <- samplePeak(dir, path, stop) }()
 	var wg sync.WaitGroup
-	for _, job := range []Job{BPM, SKey, EssentiaKey} {
+	for _, job := range []Job{BPM, SKey, EssentiaKey, Spectrogram} {
 		wg.Go(func() {
 			r := a.Run(context.Background(), job, Track{Path: path})
 			if r.Err != nil {
 				t.Errorf("%s: %v", job, r.Err)
+				return
+			}
+			if job == Spectrogram {
+				t.Logf("%s: %d bytes of PNG", job, len(r.PNG))
+				if len(r.PNG) == 0 {
+					t.Errorf("%s drew nothing", job)
+				}
 				return
 			}
 			t.Logf("%s: %+v", job, r)
@@ -68,23 +75,26 @@ func TestScriptsCancel(t *testing.T) {
 	a := New(Options{ScriptDir: dir})
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
-	for _, job := range []Job{BPM, SKey, EssentiaKey} {
+	for _, job := range []Job{BPM, SKey, EssentiaKey, Spectrogram} {
 		wg.Go(func() { a.Run(ctx, job, Track{Path: path}) })
 	}
 	time.Sleep(3 * time.Second)
 	cancel()
 	wg.Wait()
 	time.Sleep(200 * time.Millisecond)
-	out, _ := exec.Command("pgrep", "-f", dir).Output()
-	if len(strings.TrimSpace(string(out))) > 0 {
-		t.Fatalf("processes left after cancel: %s", out)
+	for _, pattern := range []string{dir, path} {
+		out, _ := exec.Command("pgrep", "-f", pattern).Output()
+		if len(strings.TrimSpace(string(out))) > 0 {
+			t.Fatalf("processes left after cancel: %s", out)
+		}
 	}
 }
 
 // samplePeak returns the highest total resident memory, until stop closes,
-// of every process group that has a process running a script from dir.
-// Groups count their ffmpeg children too.
-func samplePeak(dir string, stop <-chan struct{}) int64 {
+// of every process group that has a process running a script from dir or
+// reading path (the spectrogram's ffmpeg). Groups count their ffmpeg
+// children too.
+func samplePeak(dir, path string, stop <-chan struct{}) int64 {
 	var peak int64
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
@@ -111,7 +121,7 @@ func samplePeak(dir string, stop <-chan struct{}) int64 {
 			}
 			kb, _ := strconv.ParseInt(f[1], 10, 64)
 			procs = append(procs, proc{f[0], kb})
-			if strings.Contains(line, dir) {
+			if strings.Contains(line, dir) || strings.Contains(line, path) {
 				groups[f[0]] = true
 			}
 		}

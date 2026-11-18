@@ -12,6 +12,7 @@ import (
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/NimbleMarkets/ntcharts/v2/picture"
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 
@@ -56,6 +57,7 @@ type Library struct {
 	toPlaylists map[model.TrackID][]string
 
 	analysis *analysisPanel // nil when closed; see analysis.go
+	spectrum picture.Model  // the analysis panel's spectrogram
 
 	search     *searchPrompt // the / prompt; nil when closed
 	lastSearch string        // the pattern n and N repeat
@@ -137,7 +139,7 @@ func New(ctx context.Context, a *app.App, bus *events.Bus) tea.Model {
 	return &Library{
 		ctx: ctx, app: a, bus: bus, table: t, cols: cols, sortBy: defaultSort,
 		deleteMode: a.Capabilities().DeleteMode, tagsPath: tagsPath,
-		spinner: newSpinner(), zones: zones,
+		spinner: newSpinner(), zones: zones, spectrum: newSpectrum(),
 	}
 }
 
@@ -148,7 +150,8 @@ const (
 )
 
 func (m *Library) Init() tea.Cmd {
-	return tea.Batch(WaitForEvent(m.bus), m.load())
+	// The picture asks for the cell size and whether Kitty graphics work.
+	return tea.Batch(WaitForEvent(m.bus), m.load(), m.spectrum.Init())
 }
 
 // load queries the master (or inbox) tracks in the current sort order and
@@ -170,6 +173,11 @@ func (m *Library) load() tea.Cmd {
 }
 
 func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if picture.IsPictureMsg(msg) {
+		// The terminal's answers (cell size, Kitty support) and the
+		// picture's own frames.
+		return m, tea.Batch(m.spectrum.Update(msg), m.kittyOn())
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -182,7 +190,7 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.dialog != nil {
 			m.dialog.layout(m.width, m.height)
 		}
-		return m, nil
+		return m, m.sizeSpectrum()
 
 	case tea.KeyPressMsg:
 		k := libraryKeys
@@ -357,8 +365,7 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.promoted(msg.Summary)
 		return m, nil
 	case AnalyzeResult:
-		m.analyzed(msg)
-		return m, nil
+		return m, m.analyzed(msg)
 	case SaveBeatportTokenResult:
 		return m, m.tokenSaved(msg)
 	case WriteTagsResult:
@@ -668,7 +675,7 @@ func (m *Library) View() tea.View {
 		content = overlayBottom(content, m.edit.tagsPanel(m.width), m.height)
 	}
 	if m.analysis != nil {
-		content = overlayTopRight(content, m.analysis.view(m.width, m.spinner.View()), m.width)
+		content = overlayTopRight(content, m.analysis.view(m.width, m.spinner.View(), m.spectrum.View().Content), m.width)
 	}
 	if m.dialog != nil {
 		content = overlay(content, m.dialog.view(m.width, m.height, m.spinner.View()), m.width, m.height)

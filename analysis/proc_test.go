@@ -91,3 +91,14 @@ func TestGroupRSSCountsThisProcess(t *testing.T) {
 		t.Fatalf("rss %d, err %v", rss, err)
 	}
 }
+
+// A track over MaxDuration gets no job run: every job says ErrTooLong.
+func TestTooLong(t *testing.T) {
+	a := New(Options{ScriptDir: t.TempDir()})
+	for _, job := range Jobs {
+		r := a.Run(t.Context(), job, Track{Path: "/nonexistent.mp3", Duration: MaxDuration + time.Second})
+		if !errors.Is(r.Err, ErrTooLong) {
+			t.Errorf("%s: err %v, want ErrTooLong", job, r.Err)
+		}
+	}
+}
