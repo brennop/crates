@@ -101,4 +101,7 @@ func TestTooLong(t *testing.T) {
 			t.Errorf("%s: err %v, want ErrTooLong", job, r.Err)
 		}
 	}
+	if err := Spek(t.Context(), Track{Path: "/nonexistent.mp3", Duration: MaxDuration + time.Second}); !errors.Is(err, ErrTooLong) {
+		t.Errorf("Spek: err %v, want ErrTooLong", err)
+	}
 }

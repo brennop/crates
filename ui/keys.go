@@ -19,7 +19,7 @@ var libraryKeys = struct {
 	ForceQuit, Quit, Pause, Search, Next, Prev, Sort binding.Binding
 	EditTitle, EditArtist, EditComment, EditKey      binding.Binding
 	Playlists, Delete, DeleteNow, Analyze, Inbox     binding.Binding
-	Promote                                          binding.Binding
+	Promote, Spek                                    binding.Binding
 
 	// z and g are prefixes: zz centers, gg goes to the top, ge edits the
 	// genre. A lone g must not go to the top (see New).
@@ -44,6 +44,7 @@ var libraryKeys = struct {
 	Analyze:   newBinding("m", "analysis", "m"),
 	Inbox:     newBinding("i", "inbox", "i"),
 	Promote:   newBinding("P", "promote", "P"),
+	Spek:      newBinding("S", "spectrogram", "S"),
 
 	Center:    newBinding("zz", "center", "z"),
 	G:         newBinding("g", "prefix", "g"),

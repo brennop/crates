@@ -293,6 +293,14 @@ func Analyze(ctx context.Context, a *app.App, id model.TrackID, job analysis.Job
 	return func() tea.Msg { return AnalyzeResult{ID: id, Result: a.Analyze(ctx, id, job)} }
 }
 
+// SpekResult says how a Spek window ended: nil when the user closed it.
+type SpekResult struct{ Err error }
+
+// Spek opens track id in Spek; the result comes when its window closes.
+func Spek(ctx context.Context, a *app.App, id model.TrackID) tea.Cmd {
+	return func() tea.Msg { return SpekResult{Err: a.Spek(ctx, id)} }
+}
+
 // ---- Other ----
 
 type CapabilitiesResult struct {

@@ -28,20 +28,13 @@ func TestScripts(t *testing.T) {
 	a := New(Options{ScriptDir: dir})
 	stop := make(chan struct{})
 	peak := make(chan int64)
-	go func() { peak <- samplePeak(dir, path, stop) }()
+	go func() { peak <- samplePeak(dir, stop) }()
 	var wg sync.WaitGroup
-	for _, job := range []Job{BPM, SKey, EssentiaKey, Spectrogram} {
+	for _, job := range []Job{BPM, SKey, EssentiaKey} {
 		wg.Go(func() {
 			r := a.Run(context.Background(), job, Track{Path: path})
 			if r.Err != nil {
 				t.Errorf("%s: %v", job, r.Err)
-				return
-			}
-			if job == Spectrogram {
-				t.Logf("%s: %d bytes of PNG", job, len(r.PNG))
-				if len(r.PNG) == 0 {
-					t.Errorf("%s drew nothing", job)
-				}
 				return
 			}
 			t.Logf("%s: %+v", job, r)
@@ -75,26 +68,23 @@ func TestScriptsCancel(t *testing.T) {
 	a := New(Options{ScriptDir: dir})
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
-	for _, job := range []Job{BPM, SKey, EssentiaKey, Spectrogram} {
+	for _, job := range []Job{BPM, SKey, EssentiaKey} {
 		wg.Go(func() { a.Run(ctx, job, Track{Path: path}) })
 	}
 	time.Sleep(3 * time.Second)
 	cancel()
 	wg.Wait()
 	time.Sleep(200 * time.Millisecond)
-	for _, pattern := range []string{dir, path} {
-		out, _ := exec.Command("pgrep", "-f", pattern).Output()
-		if len(strings.TrimSpace(string(out))) > 0 {
-			t.Fatalf("processes left after cancel: %s", out)
-		}
+	out, _ := exec.Command("pgrep", "-f", dir).Output()
+	if len(strings.TrimSpace(string(out))) > 0 {
+		t.Fatalf("processes left after cancel: %s", out)
 	}
 }
 
 // samplePeak returns the highest total resident memory, until stop closes,
-// of every process group that has a process running a script from dir or
-// reading path (the spectrogram's ffmpeg). Groups count their ffmpeg
-// children too.
-func samplePeak(dir, path string, stop <-chan struct{}) int64 {
+// of every process group that has a process running a script from dir.
+// Groups count their ffmpeg children too.
+func samplePeak(dir string, stop <-chan struct{}) int64 {
 	var peak int64
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
@@ -121,7 +111,7 @@ func samplePeak(dir, path string, stop <-chan struct{}) int64 {
 			}
 			kb, _ := strconv.ParseInt(f[1], 10, 64)
 			procs = append(procs, proc{f[0], kb})
-			if strings.Contains(line, dir) || strings.Contains(line, path) {
+			if strings.Contains(line, dir) {
 				groups[f[0]] = true
 			}
 		}
@@ -132,5 +122,32 @@ func samplePeak(dir, path string, stop <-chan struct{}) int64 {
 			}
 		}
 		peak = max(peak, total)
+	}
+}
+
+// TestSpekCancel opens the real Spek on CRATES_ANALYSIS_AUDIO, cancels it
+// while its window is open, and checks that it is gone.
+func TestSpekCancel(t *testing.T) {
+	path := os.Getenv("CRATES_ANALYSIS_AUDIO")
+	if path == "" {
+		t.Skip("set CRATES_ANALYSIS_AUDIO to an audio file to open Spek")
+	}
+	if _, err := exec.LookPath("spek"); err != nil {
+		t.Skip("spek not on PATH")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- Spek(ctx, Track{Path: path}) }()
+	time.Sleep(3 * time.Second)
+	if out, _ := exec.Command("pgrep", "-f", "spek "+path).Output(); len(strings.TrimSpace(string(out))) == 0 {
+		t.Fatal("spek is not running")
+	}
+	cancel()
+	if err := <-done; err == nil {
+		t.Error("a cancelled Spek returned no error")
+	}
+	time.Sleep(200 * time.Millisecond)
+	if out, _ := exec.Command("pgrep", "-f", path).Output(); len(strings.TrimSpace(string(out))) > 0 {
+		t.Fatalf("processes left after cancel: %s", out)
 	}
 }

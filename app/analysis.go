@@ -64,6 +64,28 @@ func (a *App) Analyze(ctx context.Context, id model.TrackID, job analysis.Job) a
 	return r
 }
 
+// Spek opens track id in Spek and returns once its window is closed.
+// Close kills it. A track over analysis.MaxDuration is refused.
+func (a *App) Spek(ctx context.Context, id model.TrackID) error {
+	t, err := a.track(id)
+	if err != nil {
+		return err
+	}
+	a.speksMu.Lock()
+	if a.ctx.Err() != nil { // closing: Close may already be waiting
+		a.speksMu.Unlock()
+		return a.ctx.Err()
+	}
+	a.speks.Add(1)
+	a.speksMu.Unlock()
+	defer a.speks.Done()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stop := context.AfterFunc(a.ctx, cancel)
+	defer stop()
+	return analysis.Spek(ctx, analysis.Track{Path: t.Path, Duration: t.Duration})
+}
+
 // HasBeatportToken reports whether a Beatport token is saved, whether or
 // not Beatport will still accept it.
 func (a *App) HasBeatportToken() bool { return a.analyzer.HasBeatportToken() }

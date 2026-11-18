@@ -33,11 +33,10 @@ const (
 	SKey                   // key, Deezer's S-KEY model
 	EssentiaKey            // key, Essentia's KeyExtractor with its EDM profiles
 	Beatport               // BPM and key from Beatport's catalog
-	Spectrogram            // a picture of the spectrum over time, by ffmpeg
 )
 
 // Jobs lists every job, in the order a panel shows them.
-var Jobs = []Job{BPM, SKey, EssentiaKey, Beatport, Spectrogram}
+var Jobs = []Job{BPM, SKey, EssentiaKey, Beatport}
 
 func (j Job) String() string {
 	switch j {
@@ -49,8 +48,6 @@ func (j Job) String() string {
 		return "Key · Essentia"
 	case Beatport:
 		return "Beatport"
-	case Spectrogram:
-		return "Spectrogram"
 	}
 	return fmt.Sprintf("Job(%d)", int(j))
 }
@@ -77,7 +74,6 @@ type Result struct {
 	Confidence float64 // Essentia's beat confidence, 0–5.32
 	Keys       []KeyGuess
 	Match      string // Beatport: "artists – title (mix)" of the matched track
-	PNG        []byte // Spectrogram: the picture, time left to right, 0 Hz at the bottom
 	Err        error
 }
 
@@ -174,8 +170,6 @@ func (a *Analyzer) Run(ctx context.Context, job Job, t Track) Result {
 	case Beatport:
 		r = a.beatport(ctx, t)
 		r.Job = job
-	case Spectrogram:
-		r.PNG, r.Err = spectrogram(ctx, t.Path)
 	default:
 		r.Err = fmt.Errorf("analysis: unknown job %d", job)
 	}

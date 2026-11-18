@@ -48,7 +48,9 @@ type App struct {
 	lib      *library.Library
 	tags     tags.Store
 	analyzer *analysis.Analyzer
-	analyses analysisCache // successful analysis results, for the session
+	analyses analysisCache  // successful analysis results, for the session
+	speks    sync.WaitGroup // Spek windows open; Close waits for them to be killed
+	speksMu  sync.Mutex     // orders speks.Add against Close
 	// runJob is analyzer.Run; tests swap it.
 	runJob   func(context.Context, analysis.Job, analysis.Track) analysis.Result
 	music    music.Client  // wrapped to track Music's state
@@ -198,7 +200,10 @@ func (a *App) Close() error {
 	if !first {
 		return nil
 	}
+	a.speksMu.Lock()
 	a.cancel()
+	a.speksMu.Unlock()
+	a.speks.Wait() // cancel kills each Spek's process group
 	<-a.done
 	a.recMu.Lock()
 	started := a.recStarted
