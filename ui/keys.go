@@ -18,7 +18,7 @@ func newBinding(help, desc string, keys ...string) binding.Binding {
 var libraryKeys = struct {
 	ForceQuit, Quit, Pause, Search, Next, Prev, Sort binding.Binding
 	EditTitle, EditArtist, EditComment, EditKey      binding.Binding
-	Playlists, Delete, DeleteNow, Analyze            binding.Binding
+	Playlists, Delete, DeleteNow, Analyze, Inbox     binding.Binding
 
 	// z and g are prefixes: zz centers, gg goes to the top, ge edits the
 	// genre. A lone g must not go to the top (see New).
@@ -44,6 +44,7 @@ var libraryKeys = struct {
 	Delete:    newBinding("x", "delete", "x"),
 	DeleteNow: newBinding("X", "delete without asking", "X"),
 	Analyze:   newBinding("m", "analysis", "m"),
+	Inbox:     newBinding("i", "inbox", "i"),
 
 	Center:    newBinding("zz", "center", "z"),
 	G:         newBinding("g", "prefix", "g"),
@@ -56,7 +57,7 @@ var libraryKeys = struct {
 // libraryHints are the keys the idle status line lists.
 func libraryHints() []binding.Binding {
 	k := libraryKeys
-	return []binding.Binding{k.Pause, k.Search, k.Edit, k.Sort, k.Playlists, k.Analyze, k.Delete, k.Quit}
+	return []binding.Binding{k.Pause, k.Search, k.Edit, k.Sort, k.Inbox, k.Playlists, k.Analyze, k.Delete, k.Quit}
 }
 
 // promptKeys end the / search and tag edit prompts; the textinput handles

@@ -167,6 +167,35 @@ func TestLibrarySortCycles(t *testing.T) {
 	}
 }
 
+func TestLibraryInboxToggles(t *testing.T) {
+	e := newEnv(t)
+	e.file(e.master, "a.mp3")
+	e.file(e.master, "b.mp3")
+	c := e.file(e.inbox, "c.mp3")
+	m := New(e.ctx, e.app, e.bus).(*Library)
+	feed(t, m, tea.WindowSizeMsg{Width: 120, Height: 20})
+	reload(t, m)
+
+	i := tea.KeyPressMsg{Code: 'i', Text: "i"}
+	loaded, ok := find[libraryLoaded](feed(t, m, i))
+	if !ok || loaded.err != nil || len(loaded.tracks) != 1 || loaded.tracks[0].ID != c.ID {
+		t.Fatalf("i: load = %+v, want only the inbox track", loaded)
+	}
+	feed(t, m, loaded)
+	if !strings.Contains(m.View().Content, "Inbox · 1 tracks") {
+		t.Error("view does not name the inbox")
+	}
+
+	loaded, ok = find[libraryLoaded](feed(t, m, i))
+	if !ok || len(loaded.tracks) != 2 {
+		t.Fatalf("i again: load = %+v, want the 2 master tracks", loaded)
+	}
+	feed(t, m, loaded)
+	if !strings.Contains(m.View().Content, "Library · 2 tracks") {
+		t.Error("view does not name the Library")
+	}
+}
+
 // reload loads the library and feeds the result to m.
 func reload(t *testing.T, m *Library) {
 	t.Helper()

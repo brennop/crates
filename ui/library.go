@@ -26,8 +26,8 @@ import (
 // scrolling through the list does not load every track it passes.
 const playDelay = 150 * time.Millisecond
 
-// Library is the Bubble Tea model: a table of the master tracks. The track
-// under the cursor is the one playing.
+// Library is the Bubble Tea model: a table of the master tracks, or of the
+// inbox tracks after i. The track under the cursor is the one playing.
 type Library struct {
 	ctx context.Context
 	app *app.App
@@ -46,7 +46,8 @@ type Library struct {
 	player    events.PlayerState
 	status    string // last error, shown in the status line
 
-	sortBy int // index into sortOrders
+	sortBy int  // index into sortOrders
+	inbox  bool // the table lists the inbox tracks instead of master
 
 	dialog *playlistDialog // nil when closed
 
@@ -145,14 +146,17 @@ func (m *Library) Init() tea.Cmd {
 	return tea.Batch(WaitForEvent(m.bus), m.load())
 }
 
-// load queries the master tracks in the current sort order and reads them
-// in one go.
+// load queries the master (or inbox) tracks in the current sort order and
+// reads them in one go.
 func (m *Library) load() tea.Cmd {
 	m.gen++
 	gen, ctx, a, field := m.gen, m.ctx, m.app, sortOrders[m.sortBy].field
+	role := model.Master
+	if m.inbox {
+		role = model.Inbox
+	}
 	return func() tea.Msg {
-		master := model.Master
-		ids, err := a.Query(ctx, app.Filter{Role: &master}, app.Sort{Field: field})
+		ids, err := a.Query(ctx, app.Filter{Role: &role}, app.Sort{Field: field})
 		if err != nil {
 			return libraryLoaded{gen: gen, err: err}
 		}
@@ -272,6 +276,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cols = columns(m.width, sortOrders[m.sortBy].col)
 			m.table.SetColumns(m.cols)
 			return m, m.load() // setTracks keeps the cursor on the same track
+		case binding.Matches(msg, k.Inbox):
+			m.inbox = !m.inbox
+			return m, m.load()
 		}
 		if m.moveKey(msg) {
 			return m, m.selectionMoved()
@@ -560,7 +567,11 @@ func (m *Library) row(t model.Track, selected bool) table.Row {
 }
 
 func (m *Library) View() tea.View {
-	title := titleStyle.Render(fmt.Sprintf("Library · %d tracks", len(m.tracks)))
+	name := "Library"
+	if m.inbox {
+		name = "Inbox"
+	}
+	title := titleStyle.Render(fmt.Sprintf("%s · %d tracks", name, len(m.tracks)))
 	if s := m.scanView(); s != "" {
 		title += s
 	}
