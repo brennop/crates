@@ -22,7 +22,7 @@ The UI is Bubble Tea v2 with bubbles v2 and lipgloss v2 (`charm.land/...`). Befo
 
 Read the component's source in the module cache (`go env GOMODCACHE`) to see what it can do; check its options before deciding it can't.
 
-Write your own only when the component cannot do the job, and say why in a doc comment where you write it. `ui/scroll.go` is the example: `table` cannot keep a scrolloff margin or center the cursor, so the Library does its own scrolling. Don't replace the existing exceptions either: the scrolling in `scroll.go`, the self-padded cells in `row` (so tints fill the cell), and the `z`/`g` prefixes (bubbles has no key sequences).
+If the component cannot do what was asked, stop and tell the owner what it can and cannot do; don't build a custom widget, key handling or panel to fill the gap. Write your own only when the owner agrees, and say why in a doc comment where you write it. `ui/scroll.go` is the example: `table` cannot keep a scrolloff margin or center the cursor, so the Library does its own scrolling. Don't replace the existing exceptions either: the scrolling in `scroll.go`, the self-padded cells in `row` (so tints fill the cell), and the `z`/`g` prefixes (bubbles has no key sequences).
 
 `TestKeysMatchBindings` fails when a key press is matched by its `String()`. Add a binding instead, so the hint lines stay true.
 
