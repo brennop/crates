@@ -141,3 +141,59 @@ func TestZZCenters(t *testing.T) {
 		t.Fatal("z still pending")
 	}
 }
+
+func TestWheelScrollsTheView(t *testing.T) {
+	e := newEnv(t)
+	for i := range 20 {
+		e.file(e.master, fmt.Sprintf("%02d.mp3", i))
+	}
+	m := New(e.ctx, e.app, e.bus).(*Library)
+	feed(t, m, tea.WindowSizeMsg{Width: 120, Height: 10})
+	loaded, ok := find[libraryLoaded](exec(m.load()))
+	if !ok {
+		t.Fatal("load returned no libraryLoaded")
+	}
+	feed(t, m, loaded)
+	h := m.pageHeight()
+	selected := m.selected()
+
+	wheel := func(b tea.MouseButton) []tea.Msg { return feed(t, m, tea.MouseWheelMsg{Button: b}) }
+	if msgs := wheel(tea.MouseWheelDown); len(msgs) != 0 {
+		t.Errorf("wheel gave %v, want nothing (no playback)", msgs)
+	}
+	if m.top != wheelRows || m.selected() != selected {
+		t.Errorf("after one notch: top %d cursor %d, want top %d and the cursor kept", m.top, m.cursor, wheelRows)
+	}
+	// Scrolled off screen: the table highlights nothing.
+	for range 3 {
+		wheel(tea.MouseWheelDown)
+	}
+	if m.cursorShown() || !m.selHidden {
+		t.Fatalf("cursor %d still shown with top %d", m.cursor, m.top)
+	}
+	if strings.Contains(m.table.View(), "48;5;57m") { // the Selected background
+		t.Error("a row is highlighted while the cursor is off screen")
+	}
+	// A movement key starts from the view, not from the row off screen.
+	top := m.top
+	tick, ok := find[playTick](feed(t, m, tea.KeyPressMsg{Code: tea.KeyDown}))
+	if !ok || m.cursor != top+m.margin()+1 || m.top != top || !m.cursorShown() || m.selHidden {
+		t.Errorf("down after scrolling: cursor %d top %d (was %d), tick %v", m.cursor, m.top, top, ok)
+	}
+	if tick.id != m.selected() {
+		t.Error("the row reached is not the one that plays")
+	}
+	// The wheel stops at the ends.
+	for range 20 {
+		wheel(tea.MouseWheelDown)
+	}
+	if m.top != len(m.tracks)-h {
+		t.Errorf("top %d past the end, want %d", m.top, len(m.tracks)-h)
+	}
+	for range 20 {
+		wheel(tea.MouseWheelUp)
+	}
+	if m.top != 0 {
+		t.Errorf("top %d, want 0", m.top)
+	}
+}

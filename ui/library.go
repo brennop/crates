@@ -67,6 +67,8 @@ type Library struct {
 	spinner  spinner.Model       // shown while busy; see busy.go
 	spinning bool                // a spinner tick is pending
 
+	selHidden bool // the table's highlight is off: the cursor is scrolled off screen
+
 	zones *zone.Manager // where the table and the bar are on screen, for clicks
 
 	width, height int
@@ -363,13 +365,23 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.seekClick(msg)
 	case tea.MouseWheelMsg:
-		// With the mouse on, the terminal sends the wheel here instead of
-		// as arrow keys; turn it back into them so it still moves the cursor.
-		switch msg.Button {
-		case tea.MouseWheelUp:
-			return m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
-		case tea.MouseWheelDown:
-			return m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+		up, down := msg.Button == tea.MouseWheelUp, msg.Button == tea.MouseWheelDown
+		if m.mouseBlocked() {
+			// With the mouse on, the terminal sends the wheel here instead
+			// of as arrow keys; a dialog or prompt still gets them as keys.
+			switch {
+			case up:
+				return m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+			case down:
+				return m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+			}
+			return m, nil
+		}
+		switch {
+		case up:
+			m.scrollBy(-wheelRows)
+		case down:
+			m.scrollBy(wheelRows)
 		}
 		return m, nil
 

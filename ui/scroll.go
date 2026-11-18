@@ -50,6 +50,23 @@ func (m *Library) scroll() {
 	m.clampTop()
 }
 
+// wheelRows is how far one notch of the mouse wheel scrolls.
+const wheelRows = 3
+
+// scrollBy scrolls the view n rows without moving the cursor, so nothing
+// new plays. The cursor may end up off screen; the next movement key
+// brings it back into view first (see moveKey).
+func (m *Library) scrollBy(n int) {
+	m.top += n
+	m.clampTop()
+	m.refreshRows()
+}
+
+// cursorShown reports whether the cursor's row is on screen.
+func (m *Library) cursorShown() bool {
+	return m.cursor >= m.top && m.cursor < m.top+m.pageHeight()
+}
+
 // center scrolls the cursor row to the middle of the screen (zz).
 func (m *Library) center() {
 	m.top = m.cursor - m.pageHeight()/2
@@ -68,6 +85,15 @@ func (m *Library) clampTop() {
 // vim's ctrl+f and ctrl+d.
 func (m *Library) moveKey(msg tea.KeyPressMsg) bool {
 	km, h := m.table.KeyMap, m.pageHeight()
+	if !m.cursorShown() && binding.Matches(msg, km.LineUp, km.LineDown, km.PageUp,
+		km.PageDown, km.HalfPageUp, km.HalfPageDown) {
+		// Scrolled away with the wheel: move from the view, not from the
+		// row off screen. The cursor lands inside the margin, on the edge
+		// it left by, then moves as usual.
+		so := m.margin()
+		m.cursor = max(min(m.cursor, m.top+h-1-so), m.top+so)
+		m.cursor = max(min(m.cursor, len(m.tracks)-1), 0)
+	}
 	by := func(n int) {
 		m.top += n
 		m.clampTop()
@@ -105,5 +131,15 @@ func (m *Library) refreshRows() {
 		rows = append(rows, m.row(m.tracks[i], i == m.cursor))
 	}
 	m.table.SetRows(rows)
+	// The table always highlights a row, clamping its cursor to the rows it
+	// has; with the cursor scrolled off screen, its highlight is turned off.
+	if shown := m.cursorShown(); shown == m.selHidden {
+		m.selHidden = !shown
+		st := tableStyles()
+		if m.selHidden {
+			st.Selected = st.Cell
+		}
+		m.table.SetStyles(st)
+	}
 	m.table.SetCursor(m.cursor - m.top)
 }
