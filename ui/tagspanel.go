@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/glamour/v2"
+	"charm.land/glamour/v2/styles"
 	"charm.land/lipgloss/v2"
 )
 
@@ -39,7 +40,11 @@ func (e *editPrompt) tagsPanel(width int) string {
 
 func renderTags(md string, width int) string {
 	inner := max(width-dialogChrome, 10)
-	r, err := glamour.NewTermRenderer(glamour.WithStandardStyle("dark"), glamour.WithWordWrap(inner))
+	// The dark style, but with the text in the terminal's own color: the
+	// style's gray (252) reads as low contrast.
+	st := styles.DarkStyleConfig
+	st.Document.Color = nil
+	r, err := glamour.NewTermRenderer(glamour.WithStyles(st), glamour.WithWordWrap(inner))
 	if err != nil {
 		return ""
 	}

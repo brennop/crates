@@ -79,6 +79,16 @@ func (m *Library) openAnalysis() tea.Cmd {
 // analyzed records a job's result, if the panel is still open on its track,
 // and asks for a new token when Beatport refused the saved one.
 func (m *Library) analyzed(msg AnalyzeResult) {
+	if len(msg.Result.Keys) > 0 {
+		if m.keyGuesses == nil {
+			m.keyGuesses = map[model.TrackID][]string{}
+		}
+		keys := m.keyGuesses[msg.ID]
+		for _, k := range msg.Result.Keys {
+			keys = append(keys, k.Key)
+		}
+		m.keyGuesses[msg.ID] = uniq(keys)
+	}
 	if p := m.analysis; p != nil && p.track.ID == msg.ID {
 		p.results[msg.Result.Job] = msg.Result
 		if errors.Is(msg.Result.Err, analysis.ErrBeatportRefused) && m.search == nil && m.edit == nil {

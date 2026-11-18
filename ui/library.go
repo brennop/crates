@@ -58,6 +58,10 @@ type Library struct {
 
 	analysis *analysisPanel // nil when closed; see analysis.go
 
+	// keyGuesses holds the keys analysis found for a track, offered as
+	// suggestions when its key is edited.
+	keyGuesses map[model.TrackID][]string
+
 	search     *searchPrompt // the / prompt; nil when closed
 	lastSearch string        // the pattern n and N repeat
 

@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/brennop/crates/analysis"
 	"github.com/brennop/crates/model"
 	"github.com/brennop/crates/tags"
 )
@@ -242,5 +243,75 @@ func TestEditInitialKey(t *testing.T) {
 	feed(t, m, enterKey)
 	if w := lastWrite(t, e); w.Changes[0] != (model.FrameChange{Name: "Initial Key", Value: "8A"}) {
 		t.Fatalf("changes %+v", w.Changes)
+	}
+}
+
+var tabKey = tea.KeyPressMsg{Code: tea.KeyTab}
+
+func TestEditGenreSuggestsLibraryGenres(t *testing.T) {
+	_, m := searchLibrary(t)
+	feed(t, m, key("g"))
+	feed(t, m, key("e"))
+	feed(t, m, ctrlU)
+	typeText(t, m, "Acid, Deep")
+	feed(t, m, enterKey)
+	reload(t, m)
+
+	feed(t, m, key("j")) // Bravo, Techno
+	feed(t, m, key("g"))
+	feed(t, m, key("e"))
+	typeText(t, m, ", de")
+	if got := m.edit.input.CurrentSuggestion(); got != "Techno, Deep" {
+		t.Errorf("suggestion %q, want the part of a comma-separated genre", got)
+	}
+	feed(t, m, tabKey)
+	if v := m.edit.input.Value(); v != "Techno, deep" {
+		t.Errorf("tab: %q", v)
+	}
+	feed(t, m, ctrlU)
+	typeText(t, m, "h")
+	if got := m.edit.input.CurrentSuggestion(); got != "House" {
+		t.Errorf("suggestion %q, want House", got)
+	}
+}
+
+func TestEditCommentSuggestsTagWords(t *testing.T) {
+	_, m := searchLibrary(t)
+	m.tagsPath = filepath.Join(t.TempDir(), "TAGS.md")
+	if err := os.WriteFile(m.tagsPath, []byte("**Mood** Bright, Dreamy\n\n**Groove** Groovy, Swung\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	feed(t, m, key("c"))
+	typeText(t, m, "Dre")
+	feed(t, m, tabKey)
+	typeText(t, m, " gr")
+	if got := m.edit.input.MatchedSuggestions(); len(got) != 2 || got[0] != "Dreamy Groove" || got[1] != "Dreamy Groovy" {
+		t.Errorf("matched %q", got)
+	}
+	feed(t, m, tabKey)
+	if v := m.edit.input.Value(); v != "Dreamy groove" {
+		t.Errorf("tab: %q", v)
+	}
+}
+
+func TestEditKeySuggestsAnalysis(t *testing.T) {
+	_, m := searchLibrary(t)
+	id := m.tracks[0].ID
+	feed(t, m, AnalyzeResult{ID: id, Result: analysis.Result{Job: analysis.SKey, Keys: []analysis.KeyGuess{{Key: "F# minor"}}}})
+	feed(t, m, AnalyzeResult{ID: id, Result: analysis.Result{Job: analysis.Beatport, Keys: []analysis.KeyGuess{{Key: "F# Minor"}, {Key: "A Major"}}}})
+	if got := m.keyGuesses[id]; len(got) != 2 {
+		t.Fatalf("guesses %q", got)
+	}
+	feed(t, m, key("e"))
+	typeText(t, m, "a")
+	if got := m.edit.input.CurrentSuggestion(); got != "A Major" {
+		t.Errorf("suggestion %q", got)
+	}
+	feed(t, m, key("esc"))
+
+	feed(t, m, key("j")) // never analyzed
+	feed(t, m, key("e"))
+	if m.edit.input.ShowSuggestions {
+		t.Error("suggestions on a track with no analysis")
 	}
 }
