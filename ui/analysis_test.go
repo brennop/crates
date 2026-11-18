@@ -22,7 +22,7 @@ func TestAnalysisPanelToggles(t *testing.T) {
 	e := newEnv(t)
 	e.file(e.master, "a.mp3")
 	m := New(e.ctx, e.app, e.bus).(*Library)
-	feed(t, m, tea.WindowSizeMsg{Width: 120, Height: 20})
+	feed(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	reload(t, m)
 	if err := e.app.SaveBeatportToken("tok"); err != nil {
 		t.Fatal(err)
@@ -49,7 +49,7 @@ func TestAnalysisPanelToggles(t *testing.T) {
 		t.Fatal("panel still pending after every job answered")
 	}
 	v := ansi.Strip(m.View().Content)
-	for _, want := range []string{"124.0 BPM", "A minor  8A", "edma   C major  8B  0.80", "no token"} {
+	for _, want := range []string{"124.0 BPM", "A minor  8A", "edma   C major  8B  0.80", "no token", "20k", "16k", "5k"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("panel lacks %q:\n%s", want, v)
 		}
@@ -57,7 +57,7 @@ func TestAnalysisPanelToggles(t *testing.T) {
 
 	// The spectrogram replaces its row with the picture: half-blocks here,
 	// since the test terminal never says it supports Kitty graphics.
-	if strings.Contains(v, "Spectrogram") || strings.Count(m.View().Content, "▄") < analysisWidth(120)*spectrumRows {
+	if strings.Contains(v, "Spectrogram") || strings.Count(m.View().Content, "▄") < (analysisWidth(120)-spectrumAxis)*spectrumRows {
 		t.Errorf("spectrogram not drawn under the rows:\n%s", v)
 	}
 
@@ -140,11 +140,12 @@ func testPNG(t *testing.T) []byte {
 func TestAnalysisBoxWithKittyGrid(t *testing.T) {
 	p := &analysisPanel{results: map[analysis.Job]analysis.Result{analysis.Spectrogram: {Job: analysis.Spectrogram}}}
 	inner := analysisWidth(120)
+	cols := inner - spectrumAxis
 	var grid []string
 	for y := range spectrumRows {
 		var b strings.Builder
 		b.WriteString("\x1b[38;2;0;0;43m")
-		for x := range inner {
+		for x := range cols {
 			b.WriteRune(kitty.Placeholder)
 			b.WriteRune(kitty.Diacritic(y))
 			b.WriteRune(kitty.Diacritic(x))
@@ -165,7 +166,7 @@ func TestAnalysisBoxWithKittyGrid(t *testing.T) {
 	out := overlayTopRight(base, box, 120)
 	for _, cell := range []string{
 		string([]rune{kitty.Placeholder, kitty.Diacritic(0), kitty.Diacritic(1)}),
-		string([]rune{kitty.Placeholder, kitty.Diacritic(spectrumRows - 1), kitty.Diacritic(inner - 1)}),
+		string([]rune{kitty.Placeholder, kitty.Diacritic(spectrumRows - 1), kitty.Diacritic(cols - 1)}),
 	} {
 		if !strings.Contains(out, cell) {
 			t.Errorf("overlay lost Kitty cell %q", cell)

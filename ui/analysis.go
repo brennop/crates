@@ -46,8 +46,14 @@ var analysisClose = newBinding("m", "close", "m")
 const (
 	analysisInner = 54 // inner width of the box, on a wide enough screen
 	analysisLabel = 16 // width of the job column
-	spectrumRows  = 8  // height of the spectrogram, in lines
+	spectrumRows  = 16 // height of the spectrogram, in lines
+	spectrumAxis  = 4  // width of the frequency labels left of it
 )
+
+// spectrumLabels are the frequencies marked beside the spectrogram, in Hz:
+// where MP3 encoders usually cut off (16k at 128 kbps, 19k at 256 kbps,
+// 20k at 320 kbps), and a few below.
+var spectrumLabels = []int{20000, 19000, 16000, 10000, 5000}
 
 // newSpectrum returns the picture the spectrogram is drawn in. FitFill
 // stretches it to the box's width.
@@ -116,9 +122,27 @@ func (m *Library) analyzed(msg AnalyzeResult) tea.Cmd {
 	return cmd
 }
 
-// sizeSpectrum fits the spectrogram to the box's width.
+// sizeSpectrum fits the spectrogram to the box's width, beside its labels.
 func (m *Library) sizeSpectrum() tea.Cmd {
-	return m.spectrum.SetSize(analysisWidth(m.width), spectrumRows)
+	return m.spectrum.SetSize(analysisWidth(m.width)-spectrumAxis, spectrumRows)
+}
+
+// spectrumAxisLines are the labels left of the spectrogram, one per line:
+// each frequency on the line that shows it (0 Hz at the bottom, half the
+// sample rate at the top), blank elsewhere.
+func spectrumAxisLines() []string {
+	lines := make([]string, spectrumRows)
+	nyquist := float64(analysis.SpectrogramRate) / 2
+	for _, hz := range spectrumLabels {
+		row := min(int((1-float64(hz)/nyquist)*spectrumRows), spectrumRows-1)
+		if row >= 0 && lines[row] == "" {
+			lines[row] = fmt.Sprintf("%dk", hz/1000)
+		}
+	}
+	for i, l := range lines {
+		lines[i] = dialogHintStyle.Render(fmt.Sprintf("%-*s", spectrumAxis, l))
+	}
+	return lines
 }
 
 // kittyOn switches the spectrogram to Kitty graphics once the terminal has
@@ -227,7 +251,13 @@ func (p *analysisPanel) view(width int, spin, spectrum string) string {
 	body := strings.Split(t.Render(), "\n")
 	if r, ok := p.results[analysis.Spectrogram]; ok && r.Err == nil && spectrum != "" {
 		body = append(body, "")
-		body = append(body, strings.Split(spectrum, "\n")...)
+		axis := spectrumAxisLines()
+		for i, l := range strings.Split(spectrum, "\n") {
+			if i < len(axis) {
+				l = axis[i] + l
+			}
+			body = append(body, l)
+		}
 	}
 	return dialogBox(inner, "Analysis · "+trackName(p.track), body, analysisClose)
 }
