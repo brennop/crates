@@ -327,9 +327,20 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pianoStartedMsg(msg)
 		return m, nil
 
-	case pianoUnlit:
-		if m.piano != nil && msg.seq == m.piano.litSeq {
-			m.piano.lit = -1
+	case pianoLetGo:
+		m.pianoLetGoMsg(msg)
+		return m, nil
+
+	case tea.KeyReleaseMsg:
+		if m.piano != nil {
+			m.pianoKeyUp(msg)
+		}
+		return m, nil
+
+	case tea.KeyboardEnhancementsMsg:
+		// The answer to the piano asking for key releases (see View).
+		if m.piano != nil && msg.SupportsEventTypes() {
+			m.piano.releases = true
 		}
 		return m, nil
 
@@ -716,6 +727,12 @@ func (m *Library) View() tea.View {
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion // clicks on the playing line's bar seek
 	v.WindowTitle = "crates"
+	if m.piano != nil {
+		// Key releases, so held notes sound until let go. Letter keys
+		// report them only when sent as escape codes.
+		v.KeyboardEnhancements.ReportEventTypes = true
+		v.KeyboardEnhancements.ReportAllKeysAsEscapeCodes = true
+	}
 	return v
 }
 

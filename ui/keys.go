@@ -92,11 +92,10 @@ type pianoNote struct {
 // is the white keys, C to the F an octave up, and the row above holds the
 // black keys between them.
 var pianoNotes = func() []pianoNote {
-	names := []string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
 	keys := []string{"a", "w", "s", "e", "d", "f", "t", "g", "y", "h", "u", "j", "k", "o", "l", "p", ";", "'"}
 	out := make([]pianoNote, len(keys))
 	for i, k := range keys {
-		out[i] = pianoNote{newBinding(k, names[i%12], k), i}
+		out[i] = pianoNote{newBinding(k, noteNames[i%12], k), i}
 	}
 	return out
 }()
