@@ -320,3 +320,42 @@ func TestEditKeySuggestsAnalysis(t *testing.T) {
 		t.Error("suggestions on a track with no analysis")
 	}
 }
+
+func TestEditKeyFillsAgreedKey(t *testing.T) {
+	e, m := searchLibrary(t)
+	alpha, delta := m.tracks[0].ID, m.tracks[3].ID // no key; Am
+	for _, id := range []model.TrackID{alpha, delta} {
+		feed(t, m, AnalyzeResult{ID: id, Result: analysis.Result{Job: analysis.SKey, Keys: []analysis.KeyGuess{{Key: "F# minor"}}}})
+		feed(t, m, AnalyzeResult{ID: id, Result: analysis.Result{Job: analysis.Beatport, Keys: []analysis.KeyGuess{{Key: "F# Minor"}}}})
+	}
+
+	feed(t, m, key("e"))
+	if v := m.edit.input.Value(); v != "11A" {
+		t.Fatalf("agreed key, empty tag: prefill %q, want 11A", v)
+	}
+	feed(t, m, enterKey)
+	if w := lastWrite(t, e); w.Changes[0] != (model.FrameChange{Name: "Initial Key", Value: "11A"}) {
+		t.Fatalf("changes %+v", w.Changes)
+	}
+
+	// A key already in the tag stays.
+	for range 3 {
+		feed(t, m, key("j"))
+	}
+	feed(t, m, key("e"))
+	if v := m.edit.input.Value(); v != "Am" {
+		t.Errorf("tagged track: prefill %q, want Am", v)
+	}
+	feed(t, m, key("esc"))
+
+	// Sources that disagree fill nothing.
+	feed(t, m, AnalyzeResult{ID: alpha, Result: analysis.Result{Job: analysis.EssentiaKey, Keys: []analysis.KeyGuess{{Key: "A Major"}}}})
+	for range 3 {
+		feed(t, m, key("k"))
+	}
+	m.tracks[0].Summary.Key = "" // as before the write's reload
+	feed(t, m, key("e"))
+	if v := m.edit.input.Value(); v != "" {
+		t.Errorf("disagreeing sources: prefill %q, want empty", v)
+	}
+}

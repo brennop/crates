@@ -79,6 +79,12 @@ func (m *Library) openEdit(f editField) {
 		m.edit.words, m.edit.seps = m.libraryGenres(), ","
 	case editInitialKey:
 		m.edit.words = m.keyGuesses[t.ID]
+		// With no key yet and every analysis agreeing, start with that key;
+		// orig stays empty, so enter writes it.
+		if v == "" && len(m.edit.words) == 1 {
+			m.edit.input.SetValue(m.edit.words[0])
+			m.edit.input.CursorEnd()
+		}
 	}
 	if len(m.edit.words) > 0 {
 		m.edit.input.ShowSuggestions = true
