@@ -48,6 +48,9 @@ type App struct {
 	lib      *library.Library
 	tags     tags.Store
 	analyzer *analysis.Analyzer
+	analyses analysisCache // successful analysis results, for the session
+	// runJob is analyzer.Run; tests swap it.
+	runJob   func(context.Context, analysis.Job, analysis.Track) analysis.Result
 	music    music.Client  // wrapped to track Music's state
 	musicSvc music.Service // the unwrapped one, to close
 	player   player.Player
@@ -162,6 +165,7 @@ func New(cfg Config) (*App, error) {
 	if a.analyzer == nil {
 		a.analyzer = analysis.New(analysis.Options{})
 	}
+	a.runJob = a.analyzer.Run
 	p, err := cfg.NewPlayer(a)
 	if err != nil {
 		cancel()
