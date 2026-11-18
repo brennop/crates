@@ -40,7 +40,7 @@ func (a *App) WriteTags(ctx context.Context, ids []model.TrackID, changes []mode
 
 	// Re-read even after a failed write: kid3 may have changed some files.
 	var errs []error
-	for _, t := range ts {
+	for i, t := range ts {
 		s, d, err := a.tags.Summary(t.Path)
 		if err != nil {
 			errs = append(errs, err)
@@ -55,7 +55,9 @@ func (a *App) WriteTags(ctx context.Context, ids []model.TrackID, changes []mode
 		}
 		if _, err := a.lib.Upsert(t); err != nil {
 			errs = append(errs, err)
+			continue
 		}
+		a.analyses.carry(ts[i], t)
 	}
 	if werr != nil {
 		return errors.Join(append([]error{werr}, errs...)...)

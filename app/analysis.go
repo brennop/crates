@@ -29,6 +29,30 @@ type analysisCache struct {
 	m  map[analysisKey]analysis.Result
 }
 
+func keyFor(job analysis.Job, t model.Track) analysisKey {
+	return analysisKey{job, t.ID, t.Size, t.ModTime, t.Summary.Artist, t.Summary.Title, t.Duration}
+}
+
+// carry keeps before's results for after, the same track once the app has
+// written its tags: kid3 changes the size and mtime but not the audio. The
+// Beatport result is carried only while the artist and title it searched
+// for are the same; the audio jobs read neither.
+func (c *analysisCache) carry(before, after model.Track) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, job := range analysis.Jobs {
+		r, ok := c.m[keyFor(job, before)]
+		if !ok {
+			continue
+		}
+		if job == analysis.Beatport && (before.Summary.Artist != after.Summary.Artist || before.Summary.Title != after.Summary.Title) {
+			continue
+		}
+		delete(c.m, keyFor(job, before))
+		c.m[keyFor(job, after)] = r
+	}
+}
+
 // Analyze runs one analysis job on track id. Jobs are independent: run
 // them in parallel, one call each. It changes nothing; the results are for
 // the user to read. Close, or cancelling ctx, stops a job in flight.
@@ -41,7 +65,7 @@ func (a *App) Analyze(ctx context.Context, id model.TrackID, job analysis.Job) a
 	if err != nil {
 		return analysis.Result{Job: job, Err: err}
 	}
-	k := analysisKey{job, t.ID, t.Size, t.ModTime, t.Summary.Artist, t.Summary.Title, t.Duration}
+	k := keyFor(job, t)
 	a.analyses.mu.Lock()
 	r, ok := a.analyses.m[k]
 	a.analyses.mu.Unlock()

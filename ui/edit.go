@@ -7,6 +7,7 @@ import (
 	binding "charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/brennop/crates/app"
 	"github.com/brennop/crates/model"
@@ -166,6 +167,12 @@ func (m *Library) editKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		change := model.FrameChange{Name: e.field.frame, Value: v}
 		return WriteTags(m.ctx, m.app, []model.TrackID{e.id}, []model.FrameChange{change})
+	case e.field == editInitialKey && len(e.words) > 0 && binding.Matches(msg, keyGuessKeys.Next):
+		e.stepGuess(1)
+		return nil
+	case e.field == editInitialKey && len(e.words) > 0 && binding.Matches(msg, keyGuessKeys.Prev):
+		e.stepGuess(-1)
+		return nil
 	case binding.Matches(msg, promptKeys.Erase):
 		if e.input.Value() == "" {
 			m.edit = nil
@@ -182,4 +189,67 @@ func (m *Library) editUpdate(msg tea.Msg) tea.Cmd {
 	m.edit.input, cmd = m.edit.input.Update(msg)
 	m.edit.suggest()
 	return cmd
+}
+
+// keyGuessKeys step the key prompt through the keys analysis found, which
+// sit in a box above it (guessPanel). The textinput's own NextSuggestion
+// cannot do this: it only cycles the suggestions that the typed text is
+// the start of, and the prompt opens holding the current key, or nothing.
+var keyGuessKeys = struct{ Next, Prev binding.Binding }{
+	Next: newBinding("↓", "next", "down", "ctrl+n"),
+	Prev: newBinding("↑", "previous", "up", "ctrl+p"),
+}
+
+// stepGuess puts the guess d steps from the one in the field into it, or
+// the first (last) when the field holds none of them.
+func (e *editPrompt) stepGuess(d int) {
+	n := len(e.words)
+	i := e.guessIndex()
+	switch {
+	case i >= 0:
+		i = ((i+d)%n + n) % n
+	case d > 0:
+		i = 0
+	default:
+		i = n - 1
+	}
+	e.input.SetValue(e.words[i])
+	e.input.CursorEnd()
+	e.suggest()
+}
+
+// guessIndex is the guess the field holds, ignoring case, or -1.
+func (e *editPrompt) guessIndex() int {
+	for i, w := range e.words {
+		if strings.EqualFold(w, e.input.Value()) {
+			return i
+		}
+	}
+	return -1
+}
+
+// guessPanel draws the keys analysis found, with their Camelot codes, in a
+// box for a screen width wide; the one in the field is marked.
+func (e *editPrompt) guessPanel(width int) string {
+	cur := e.guessIndex()
+	var body []string
+	for i, w := range e.words {
+		l := "  " + w
+		if c, ok := model.ParseCamelot(w); ok {
+			l += "  " + c.String()
+		}
+		if i == cur {
+			l = "›" + l[1:]
+		}
+		body = append(body, l)
+	}
+	widest := 0
+	for _, l := range body {
+		widest = max(widest, lipgloss.Width(l))
+	}
+	inner := dialogWidth(widest, width)
+	for i, l := range body {
+		body[i] = fitLine(l, inner)
+	}
+	return dialogBox(inner, "Analysis", body, keyGuessKeys.Next, keyGuessKeys.Prev)
 }

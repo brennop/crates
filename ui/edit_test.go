@@ -302,16 +302,37 @@ func TestEditKeySuggestsAnalysis(t *testing.T) {
 	if got := m.keyGuesses[id]; len(got) != 2 {
 		t.Fatalf("guesses %q", got)
 	}
+	// The guesses show as soon as the prompt opens, before any typing.
 	feed(t, m, key("e"))
-	typeText(t, m, "a")
-	if got := m.edit.input.CurrentSuggestion(); got != "A Major" {
+	v := m.View().Content
+	for _, want := range []string{"Analysis", "F# minor  11A", "A Major  11B"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("key edit lacks %q", want)
+		}
+	}
+	down, up := tea.KeyPressMsg{Code: tea.KeyDown}, tea.KeyPressMsg{Code: tea.KeyUp}
+	for i, step := range []struct {
+		msg  tea.Msg
+		want string
+	}{{down, "F# minor"}, {down, "A Major"}, {down, "F# minor"}, {up, "A Major"}} {
+		feed(t, m, step.msg)
+		if got := m.edit.input.Value(); got != step.want {
+			t.Fatalf("step %d: %q, want %q", i, got, step.want)
+		}
+	}
+	if !strings.Contains(m.View().Content, "› A Major") {
+		t.Error("the guess in the field is not marked")
+	}
+	feed(t, m, ctrlU)
+	typeText(t, m, "f")
+	if got := m.edit.input.CurrentSuggestion(); got != "F# minor" {
 		t.Errorf("suggestion %q", got)
 	}
 	feed(t, m, key("esc"))
 
 	feed(t, m, key("j")) // never analyzed
 	feed(t, m, key("e"))
-	if m.edit.input.ShowSuggestions {
+	if m.edit.input.ShowSuggestions || strings.Contains(m.View().Content, "Analysis") {
 		t.Error("suggestions on a track with no analysis")
 	}
 }

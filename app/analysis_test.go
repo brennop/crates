@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/brennop/crates/analysis"
+	"github.com/brennop/crates/model"
 )
 
 // countRuns swaps the app's job runner for one that counts calls per job
@@ -76,5 +77,41 @@ func TestAnalyzeCachesForSession(t *testing.T) {
 	e.app.Analyze(e.ctx, a.ID, analysis.BPM)
 	if runs(analysis.BPM) != 3 {
 		t.Fatalf("BPM ran %d times after the file changed, want 3", runs(analysis.BPM))
+	}
+}
+
+func TestAnalyzeCacheSurvivesTagWrites(t *testing.T) {
+	e := newEnv(t)
+	a := e.file(e.master, "a.mp3", tagged)
+	runs, _ := countRuns(e)
+	e.app.Analyze(e.ctx, a.ID, analysis.BPM)
+	e.app.Analyze(e.ctx, a.ID, analysis.Beatport)
+
+	// write changes the file's mtime, as kid3 does, then writes through
+	// the app.
+	write := func(name, value string, h time.Duration) {
+		t.Helper()
+		later := time.Now().Add(h)
+		if err := os.Chtimes(a.Path, later, later); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.app.WriteTags(e.ctx, []model.TrackID{a.ID}, []model.FrameChange{{Name: name, Value: value}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	write("Initial Key", "8A", time.Hour)
+	e.app.Analyze(e.ctx, a.ID, analysis.BPM)
+	e.app.Analyze(e.ctx, a.ID, analysis.Beatport)
+	if runs(analysis.BPM) != 1 || runs(analysis.Beatport) != 1 {
+		t.Fatalf("after a key write: BPM ran %d, Beatport %d, want 1 each", runs(analysis.BPM), runs(analysis.Beatport))
+	}
+
+	// A new title is a new Beatport search; the audio jobs stay.
+	write("Title", "Other", 2*time.Hour)
+	e.app.Analyze(e.ctx, a.ID, analysis.BPM)
+	e.app.Analyze(e.ctx, a.ID, analysis.Beatport)
+	if runs(analysis.BPM) != 1 || runs(analysis.Beatport) != 2 {
+		t.Fatalf("after a title write: BPM ran %d, Beatport %d, want 1 and 2", runs(analysis.BPM), runs(analysis.Beatport))
 	}
 }
