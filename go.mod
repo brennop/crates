@@ -11,6 +11,7 @@ require (
 	github.com/BurntSushi/toml v1.4.0
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
+	github.com/ebitengine/oto/v3 v3.5.1
 	github.com/lrstanley/bubblezone/v2 v2.0.1
 	github.com/lucasb-eyer/go-colorful v1.4.1
 	golang.org/x/text v0.24.0
@@ -32,9 +33,11 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/dlclark/regexp2 v1.11.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/ebitengine/purego v0.11.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/hjfreyer/taglib-go v0.0.0-20250508221915-cb3b18d1ad7b // indirect
+	github.com/jfreymuth/pulse v0.1.3 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.31 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect

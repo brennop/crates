@@ -19,7 +19,7 @@ var libraryKeys = struct {
 	ForceQuit, Quit, Pause, Search, Next, Prev, Sort binding.Binding
 	EditTitle, EditArtist, EditComment, EditKey      binding.Binding
 	Playlists, Delete, DeleteNow, Analyze, Inbox     binding.Binding
-	Promote, Spek                                    binding.Binding
+	Promote, Spek, Piano                             binding.Binding
 
 	// z and g are prefixes: zz centers, gg goes to the top, ge edits the
 	// genre. A lone g must not go to the top (see New).
@@ -45,6 +45,7 @@ var libraryKeys = struct {
 	Inbox:     newBinding("i", "inbox", "i"),
 	Promote:   newBinding("P", "promote", "P"),
 	Spek:      newBinding("S", "spectrogram", "S"),
+	Piano:     newBinding("v", "piano", "v"),
 
 	Center:    newBinding("zz", "center", "z"),
 	G:         newBinding("g", "prefix", "g"),
@@ -72,6 +73,33 @@ var dialogKeys = struct{ Toggle, Close binding.Binding }{
 	Toggle: newBinding("space", "toggle", "space", "enter"),
 	Close:  newBinding("esc", "close", "esc", "p", "q"),
 }
+
+// pianoKeys are the piano panel's keys besides the notes (pianoNotes).
+var pianoKeys = struct{ OctaveDown, OctaveUp, Close binding.Binding }{
+	OctaveDown: newBinding("z", "octave down", "z"),
+	OctaveUp:   newBinding("x", "octave up", "x"),
+	Close:      newBinding("v", "close", "v", "esc"),
+}
+
+// pianoNote is one key of the piano: the binding and how many semitones
+// above the octave's C it plays.
+type pianoNote struct {
+	key  binding.Binding
+	semi int
+}
+
+// pianoNotes lay the keyboard out like a web piano: the home row from a
+// is the white keys, C to the F an octave up, and the row above holds the
+// black keys between them.
+var pianoNotes = func() []pianoNote {
+	names := []string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
+	keys := []string{"a", "w", "s", "e", "d", "f", "t", "g", "y", "h", "u", "j", "k", "o", "l", "p", ";", "'"}
+	out := make([]pianoNote, len(keys))
+	for i, k := range keys {
+		out[i] = pianoNote{newBinding(k, names[i%12], k), i}
+	}
+	return out
+}()
 
 // hints renders bindings as one "key desc · key desc" line, dropping the
 // ones that do not fit in width (0 for no limit). It is unstyled; the

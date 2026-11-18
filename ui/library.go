@@ -69,6 +69,9 @@ type Library struct {
 	token    *tokenPrompt // the Beatport token prompt; nil when closed; see analysis.go
 	tagsPath string       // TAGS.md, shown over the table while editing a comment
 
+	piano *pianoPanel // nil when closed; see piano.go
+	synth noteSynth   // the piano's sound, made on first open
+
 	confirm     *deleteConfirm // nil when closed
 	deleteMode  fsops.Mode     // delete_mode, for the confirm text
 	afterDelete deletedRow     // where the cursor goes once a deleted or promoted row is gone
@@ -226,6 +229,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.token != nil {
 			return m, m.tokenKey(msg)
 		}
+		if m.piano != nil {
+			return m, m.pianoKey(msg)
+		}
 		if m.zPending {
 			m.zPending = false
 			if binding.Matches(msg, k.Center) {
@@ -269,6 +275,8 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.openDialog()
 		case binding.Matches(msg, k.Analyze):
 			return m, m.toggleAnalysis()
+		case binding.Matches(msg, k.Piano):
+			return m, m.openPiano()
 		case binding.Matches(msg, k.Spek):
 			if id := m.selected(); id != 0 {
 				return m, Spek(m.ctx, m.app, id)
@@ -314,6 +322,16 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.dialog.updateList(msg)
 		}
 		return m, m.promptUpdate(msg)
+
+	case pianoStarted:
+		m.pianoStartedMsg(msg)
+		return m, nil
+
+	case pianoUnlit:
+		if m.piano != nil && msg.seq == m.piano.litSeq {
+			m.piano.lit = -1
+		}
+		return m, nil
 
 	case libraryLoaded:
 		if msg.gen != m.gen {
@@ -682,6 +700,9 @@ func (m *Library) View() tea.View {
 	if m.edit != nil && strings.TrimSpace(m.edit.vocab) != "" {
 		content = overlayBottom(content, m.edit.tagsPanel(m.width), m.height)
 	}
+	if m.piano != nil {
+		content = overlayBottom(content, m.piano.view(m.width), m.height)
+	}
 	if m.analysis != nil {
 		content = overlayTopRight(content, m.analysis.view(m.width, m.spinner.View()), m.width)
 	}
@@ -740,7 +761,7 @@ func (m *Library) playingName() string {
 // status line, or a dialog covers the table.
 func (m *Library) mouseBlocked() bool {
 	return m.search != nil || m.edit != nil || m.token != nil ||
-		m.dialog != nil || m.confirm != nil
+		m.dialog != nil || m.confirm != nil || m.piano != nil
 }
 
 // rowClick selects the row a click hit, which then plays like a row reached
