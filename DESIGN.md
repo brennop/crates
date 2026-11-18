@@ -32,7 +32,7 @@ The master dir is one flat namespace, so name collisions on promote are the deci
 ```toml
 inbox_dirs    = ["~/Downloads/music", "~/Soulseek/complete"]
 master_dir    = "~/Music/Master"          # flat: files sit directly in it
-required_tags = ["title", "artist", "album"]
+required_tags = ["title", "artist"]
 delete_mode   = "trash"                   # or "remove"
 
 [music]

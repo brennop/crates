@@ -60,7 +60,7 @@ A `TAGS.md` beside the config file is your tag vocabulary: while you edit a comm
 ```toml
 inbox_dirs    = ["~/Downloads/music", "~/Soulseek/complete"]
 master_dir    = "~/Music/Master"
-required_tags = ["title", "artist", "album"]
+required_tags = ["title", "artist"]
 delete_mode   = "trash"
 
 [music]
@@ -72,7 +72,7 @@ autolaunch = false
 | --- | --- | --- |
 | `master_dir` | (required) | The flat master folder. Files sit directly in it, and subfolders are ignored. It must exist. |
 | `inbox_dirs` | `[]` | Folders scanned recursively for new downloads. They need not exist yet. They may not overlap each other or the master. |
-| `required_tags` | `["title", "artist", "album"]` | Tags a track needs before promote. Names: `title`, `artist`, `album`, `album_artist`, `track`, `year`, `genre`, `comment`, `bpm`, `key`. |
+| `required_tags` | `["title", "artist"]` | Tags a track needs before promote. Names: `title`, `artist`, `album`, `album_artist`, `track`, `year`, `genre`, `comment`, `bpm`, `key`. |
 | `delete_mode` | `"trash"` | `"trash"` moves deleted files to the Trash; `"remove"` deletes them for good. |
 | `music.enabled` | `true` | Keep master in sync with Apple Music and offer playlist editing. Off, crates never talks to Music. |
 | `music.autolaunch` | `false` | Start Music when a call finds it not running. Off, crates waits and offers to launch it. |

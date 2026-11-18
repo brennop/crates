@@ -42,7 +42,7 @@ func TestParseValid(t *testing.T) {
 				if c.DeleteMode != DeleteTrash || !c.Music.Enabled || c.Music.Autolaunch {
 					t.Errorf("defaults not applied: %+v", c)
 				}
-				if !slices.Equal(c.RequiredTags, []string{"title", "artist", "album"}) {
+				if !slices.Equal(c.RequiredTags, []string{"title", "artist"}) {
 					t.Errorf("required_tags = %v", c.RequiredTags)
 				}
 				if len(c.InboxDirs) != 0 {

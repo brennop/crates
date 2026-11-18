@@ -39,7 +39,7 @@ type Music struct {
 // Defaults returns the values used for keys the file leaves out.
 func Defaults() Config {
 	return Config{
-		RequiredTags: []string{model.FieldTitle, model.FieldArtist, model.FieldAlbum},
+		RequiredTags: []string{model.FieldTitle, model.FieldArtist},
 		DeleteMode:   DeleteTrash,
 		Music:        Music{Enabled: true, Autolaunch: false},
 	}

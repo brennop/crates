@@ -58,7 +58,7 @@ func TestPromoteMissingTags(t *testing.T) {
 	if len(sum.Failures) != 1 || !errors.As(sum.Failures[0].Err, &m) {
 		t.Fatalf("summary = %+v", sum)
 	}
-	if !slices.Equal(m.Missing, []string{model.FieldArtist, model.FieldAlbum}) {
+	if !slices.Equal(m.Missing, []string{model.FieldArtist}) {
 		t.Fatalf("missing = %v", m.Missing)
 	}
 	if !exists(a.Path) {
