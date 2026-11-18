@@ -681,8 +681,6 @@ func (m *Library) View() tea.View {
 	content = m.zones.Scan(content)
 	if m.edit != nil && strings.TrimSpace(m.edit.vocab) != "" {
 		content = overlayBottom(content, m.edit.tagsPanel(m.width), m.height)
-	} else if m.edit != nil && m.edit.field == editInitialKey && len(m.edit.words) > 0 {
-		content = overlayBottom(content, m.edit.guessPanel(m.width), m.height)
 	}
 	if m.analysis != nil {
 		content = overlayTopRight(content, m.analysis.view(m.width, m.spinner.View()), m.width)
