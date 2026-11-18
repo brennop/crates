@@ -19,6 +19,7 @@ var libraryKeys = struct {
 	ForceQuit, Quit, Pause, Search, Next, Prev, Sort binding.Binding
 	EditTitle, EditArtist, EditComment, EditKey      binding.Binding
 	Playlists, Delete, DeleteNow, Analyze, Inbox     binding.Binding
+	Promote                                          binding.Binding
 
 	// z and g are prefixes: zz centers, gg goes to the top, ge edits the
 	// genre. A lone g must not go to the top (see New).
@@ -45,6 +46,7 @@ var libraryKeys = struct {
 	DeleteNow: newBinding("X", "delete without asking", "X"),
 	Analyze:   newBinding("m", "analysis", "m"),
 	Inbox:     newBinding("i", "inbox", "i"),
+	Promote:   newBinding("P", "promote", "P"),
 
 	Center:    newBinding("zz", "center", "z"),
 	G:         newBinding("g", "prefix", "g"),
@@ -54,9 +56,13 @@ var libraryKeys = struct {
 	Edit: newBinding("c/a/t/e/ge", "edit", "c", "a", "t", "e"),
 }
 
-// libraryHints are the keys the idle status line lists.
-func libraryHints() []binding.Binding {
+// libraryHints are the keys the idle status line lists. The inbox view
+// trades playlists for promote, since inbox tracks are not in Music.
+func libraryHints(inbox bool) []binding.Binding {
 	k := libraryKeys
+	if inbox {
+		return []binding.Binding{k.Pause, k.Search, k.Edit, k.Sort, k.Inbox, k.Promote, k.Analyze, k.Delete, k.Quit}
+	}
 	return []binding.Binding{k.Pause, k.Search, k.Edit, k.Sort, k.Inbox, k.Playlists, k.Analyze, k.Delete, k.Quit}
 }
 

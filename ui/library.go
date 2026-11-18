@@ -62,7 +62,7 @@ type Library struct {
 
 	confirm     *deleteConfirm // nil when closed
 	deleteMode  fsops.Mode     // delete_mode, for the confirm text
-	afterDelete deletedRow     // where the cursor goes once the deleted row is gone
+	afterDelete deletedRow     // where the cursor goes once a deleted or promoted row is gone
 
 	scan     events.ScanProgress // the latest scan report
 	spinner  spinner.Model       // shown while busy; see busy.go
@@ -76,7 +76,8 @@ type Library struct {
 	cols          []table.Column // current widths, so row can fill its cells
 }
 
-// deletedRow is the last track deleted from the table and the row it was on.
+// deletedRow is the last track deleted or promoted out of the table and the
+// row it was on.
 type deletedRow struct {
 	id  model.TrackID
 	row int
@@ -279,6 +280,11 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case binding.Matches(msg, k.Inbox):
 			m.inbox = !m.inbox
 			return m, m.load()
+		case binding.Matches(msg, k.Promote):
+			if !m.inbox {
+				return m, nil
+			}
+			return m, m.promote(m.selected())
 		}
 		if m.moveKey(msg) {
 			return m, m.selectionMoved()
@@ -338,6 +344,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case DeleteResult:
 		m.deleted(msg.Summary)
+		return m, nil
+	case PromoteResult:
+		m.promoted(msg.Summary)
 		return m, nil
 	case AnalyzeResult:
 		m.analyzed(msg)
@@ -460,6 +469,29 @@ func (m *Library) delete(id model.TrackID) tea.Cmd {
 		}
 	}
 	return Delete(m.ctx, m.app, []model.TrackID{id})
+}
+
+// promote moves track id into master. Like delete, it remembers the row so
+// the cursor stays there once the track leaves the inbox list.
+func (m *Library) promote(id model.TrackID) tea.Cmd {
+	if id == 0 {
+		return nil
+	}
+	m.afterDelete = deletedRow{id: id, row: m.cursor}
+	return Promote(m.ctx, m.app, []model.TrackID{id})
+}
+
+// promoted reports a promote's collision or failure in the status line. The
+// row itself goes away through the TracksChanged event's reload.
+func (m *Library) promoted(sum app.PromoteSummary) {
+	switch {
+	case len(sum.Collisions) > 0:
+		m.status = "promote: " + model.ErrCollision{Name: sum.Collisions[0].Name, Existing: sum.Collisions[0].Existing}.Error()
+	case len(sum.Failures) > 0:
+		m.status = "promote: " + sum.Failures[0].Err.Error()
+	default:
+		m.status = ""
+	}
 }
 
 // deleted reports a delete's failures in the status line. The row itself
@@ -616,7 +648,7 @@ func (m *Library) statusLine() string {
 	p := m.player
 	if p.Idle || p.TrackID == 0 {
 		const lead = "stopped · "
-		return statusStyle.Render(lead + hints(m.width-2-len(lead), libraryHints()...))
+		return statusStyle.Render(lead + hints(m.width-2-len(lead), libraryHints(m.inbox)...))
 	}
 	return playingLine(m.playingName(), p.Position, p.Duration, m.width, m.zones)
 }

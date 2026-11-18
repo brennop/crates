@@ -2,6 +2,7 @@ package ui
 
 import (
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -193,6 +194,54 @@ func TestLibraryInboxToggles(t *testing.T) {
 	feed(t, m, loaded)
 	if !strings.Contains(m.View().Content, "Library · 2 tracks") {
 		t.Error("view does not name the Library")
+	}
+}
+
+func TestLibraryPromote(t *testing.T) {
+	e := newEnv(t)
+	m0 := e.file(e.master, "taken.mp3")
+	e.file(e.inbox, "fresh.mp3")
+	e.file(e.inbox, "taken.mp3")
+	m := New(e.ctx, e.app, e.bus).(*Library)
+	feed(t, m, tea.WindowSizeMsg{Width: 120, Height: 20})
+	reload(t, m)
+
+	P := tea.KeyPressMsg{Code: 'P', Text: "P"}
+	if msgs := feed(t, m, P); len(msgs) != 0 {
+		t.Fatalf("P in the master view did something: %v", msgs)
+	}
+	if !exists(m0.Path) {
+		t.Fatal("master track gone")
+	}
+
+	feed(t, m, tea.KeyPressMsg{Code: 'i', Text: "i"})
+	reload(t, m)
+	for _, name := range []string{"fresh.mp3", "taken.mp3"} {
+		for i, tr := range m.tracks {
+			if filepath.Base(tr.Path) == name {
+				m.setCursor(i)
+			}
+		}
+		id := m.selected()
+		res, ok := find[PromoteResult](feed(t, m, P))
+		if !ok {
+			t.Fatalf("%s: P in the inbox view sent no promote", name)
+		}
+		feed(t, m, res)
+		if name == "fresh.mp3" {
+			if !slices.Equal(res.Summary.Promoted, []model.TrackID{id}) || m.status != "" {
+				t.Fatalf("fresh: summary %+v, status %q", res.Summary, m.status)
+			}
+		} else if len(res.Summary.Collisions) != 1 || !strings.Contains(m.status, "already exists in master") {
+			t.Fatalf("taken: summary %+v, status %q", res.Summary, m.status)
+		}
+		reload(t, m)
+	}
+	if len(m.tracks) != 1 || filepath.Base(m.tracks[0].Path) != "taken.mp3" {
+		t.Fatalf("inbox after promotes = %+v, want only the collision left", m.tracks)
+	}
+	if !strings.Contains(hints(0, libraryHints(true)...), "P promote") {
+		t.Error("inbox hints lack P promote")
 	}
 }
 
