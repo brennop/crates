@@ -1,11 +1,10 @@
-// Package analysis guesses a track's tempo and key from its audio, checks
-// that an MP3's spectrum fits its bitrate, and looks the track up on
-// Beatport. Each Job runs on its own, so a caller can
+// Package analysis guesses a track's tempo and key from its audio, and
+// looks the track up on Beatport. Each Job runs on its own, so a caller can
 // run them in parallel and show each result as it arrives.
 //
 // The audio jobs are Python scripts, embedded here and run with
 // `uv run --script`, which installs their pinned dependencies (Essentia,
-// Deezer's S-KEY, PyTorch, scikit-learn) into a cached environment on first use. That
+// Deezer's S-KEY and PyTorch) into a cached environment on first use. That
 // first run downloads a few hundred MB and takes minutes; later runs take
 // seconds.
 package analysis
@@ -34,11 +33,10 @@ const (
 	SKey                   // key, Deezer's S-KEY model
 	EssentiaKey            // key, Essentia's KeyExtractor with its EDM profiles
 	Beatport               // BPM and key from Beatport's catalog
-	Cutoff                 // the bitrate the spectrum fits, from ~/projects/cutoff
 )
 
 // Jobs lists every job, in the order a panel shows them.
-var Jobs = []Job{BPM, SKey, EssentiaKey, Cutoff, Beatport}
+var Jobs = []Job{BPM, SKey, EssentiaKey, Beatport}
 
 func (j Job) String() string {
 	switch j {
@@ -50,8 +48,6 @@ func (j Job) String() string {
 		return "Key · Essentia"
 	case Beatport:
 		return "Beatport"
-	case Cutoff:
-		return "Cutoff"
 	}
 	return fmt.Sprintf("Job(%d)", int(j))
 }
@@ -78,20 +74,7 @@ type Result struct {
 	Confidence float64 // Essentia's beat confidence, 0–5.32
 	Keys       []KeyGuess
 	Match      string // Beatport: "artists – title (mix)" of the matched track
-	Spectrum   *Spectrum
 	Err        error
-}
-
-// Spectrum is the Cutoff job's verdict: does the high-frequency spectrum
-// fit the bitrate in the header? A transcode (a 128 kbps file re-encoded
-// at 320) keeps the spectrum of its source.
-type Spectrum struct {
-	Status        string  // OK, SUSPECT, FAKE, or UNKNOWN: too little treble to judge by
-	ClaimedKbps   int     // the header's bitrate
-	EstimatedKbps int     // flagged files: the bitrate the content looks like; 0 when not lower
-	CutoffHz      int     // flagged files: where the content really stops; 0 when not found
-	ExpectedHz    int     // the lowpass of a genuine encode with this header
-	Score         float64 // P(transcode); SUSPECT from 0.02, FAKE from 0.5
 }
 
 // Track is what a job needs to know about a track.
@@ -134,11 +117,7 @@ type Analyzer struct {
 	dirErr error
 }
 
-// The scripts, and the Cutoff job's training table (a copy of
-// ~/projects/cutoff's src/cutoff/training.npz) that its script reads from
-// beside it.
-//
-//go:embed scripts/*.py scripts/cutoff_training.npz
+//go:embed scripts/*.py
 var scripts embed.FS
 
 // New returns an Analyzer. It does not look for uv or write the scripts
@@ -175,20 +154,6 @@ func (a *Analyzer) Run(ctx context.Context, job Job, t Track) Result {
 		r.Err = a.script(ctx, &out, "essentia_analyze.py", "key", t.Path)
 		for _, k := range out.Keys {
 			r.Keys = append(r.Keys, KeyGuess{Label: k.Profile, Key: k.Key, Strength: k.Strength})
-		}
-	case Cutoff:
-		var out struct {
-			Status        string
-			ClaimedKbps   int     `json:"claimed_kbps"`
-			EstimatedKbps int     `json:"estimated_kbps"`
-			CutoffHz      int     `json:"cutoff_hz"`
-			ExpectedHz    int     `json:"expected_hz"`
-			Score         float64 `json:"score"`
-		}
-		r.Err = a.script(ctx, &out, "cutoff_analyze.py", t.Path)
-		if r.Err == nil {
-			s := Spectrum(out)
-			r.Spectrum = &s
 		}
 	case Beatport:
 		r = a.beatport(ctx, t)

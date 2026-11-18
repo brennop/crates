@@ -37,15 +37,12 @@ func TestAnalysisPanelToggles(t *testing.T) {
 	m.Update(AnalyzeResult{ID: id, Result: analysis.Result{Job: analysis.SKey, Keys: []analysis.KeyGuess{{Key: "A minor"}}}})
 	m.Update(AnalyzeResult{ID: id, Result: analysis.Result{Job: analysis.EssentiaKey, Keys: []analysis.KeyGuess{{Label: "edma", Key: "C major", Strength: 0.8}}}})
 	m.Update(AnalyzeResult{ID: id, Result: analysis.Result{Job: analysis.Beatport, Err: errors.New("no token")}})
-	m.Update(AnalyzeResult{ID: id, Result: analysis.Result{Job: analysis.Cutoff, Spectrum: &analysis.Spectrum{
-		Status: "FAKE", ClaimedKbps: 320, EstimatedKbps: 128, CutoffHz: 16200, ExpectedHz: 20500, Score: 0.984}}})
 	m.Update(AnalyzeResult{ID: id + 100, Result: analysis.Result{Job: analysis.BPM, BPM: 1}}) // another track's
 	if m.analysis.pending() {
 		t.Fatal("panel still pending after every job answered")
 	}
 	v := ansi.Strip(m.View().Content)
-	for _, want := range []string{"124.0 BPM", "A minor  8A", "edma   C major  8B  0.80", "no token",
-		"FAKE  320 kbps, like ~128  0.98", "stops at 16.2 kHz, not 20.5"} {
+	for _, want := range []string{"124.0 BPM", "A minor  8A", "edma   C major  8B  0.80", "no token"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("panel lacks %q:\n%s", want, v)
 		}

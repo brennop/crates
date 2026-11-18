@@ -30,7 +30,7 @@ func TestScripts(t *testing.T) {
 	peak := make(chan int64)
 	go func() { peak <- samplePeak(dir, stop) }()
 	var wg sync.WaitGroup
-	for _, job := range []Job{BPM, SKey, EssentiaKey, Cutoff} {
+	for _, job := range []Job{BPM, SKey, EssentiaKey} {
 		wg.Go(func() {
 			r := a.Run(context.Background(), job, Track{Path: path})
 			if r.Err != nil {
@@ -38,8 +38,7 @@ func TestScripts(t *testing.T) {
 				return
 			}
 			t.Logf("%s: %+v", job, r)
-			if job == BPM && r.BPM <= 0 || job == Cutoff && r.Spectrum == nil ||
-				job != BPM && job != Cutoff && len(r.Keys) == 0 {
+			if job == BPM && r.BPM <= 0 || job != BPM && len(r.Keys) == 0 {
 				t.Errorf("%s found nothing: %+v", job, r)
 			}
 		})
@@ -69,7 +68,7 @@ func TestScriptsCancel(t *testing.T) {
 	a := New(Options{ScriptDir: dir})
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
-	for _, job := range []Job{BPM, SKey, EssentiaKey, Cutoff} {
+	for _, job := range []Job{BPM, SKey, EssentiaKey} {
 		wg.Go(func() { a.Run(ctx, job, Track{Path: path}) })
 	}
 	time.Sleep(3 * time.Second)

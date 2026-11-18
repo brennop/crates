@@ -207,33 +207,10 @@ func resultLines(r analysis.Result) []string {
 	if r.Match != "" {
 		lines = append(lines, dialogHintStyle.Render(r.Match))
 	}
-	if s := r.Spectrum; s != nil {
-		lines = append(lines, spectrumLines(*s)...)
-	}
 	if len(lines) == 0 {
 		lines = []string{dialogHintStyle.Render("nothing found")}
 	}
 	return lines
-}
-
-// spectrumLines writes the Cutoff job's verdict: the status and bitrate,
-// then where the content stops against where this bitrate's lowpass is.
-func spectrumLines(s analysis.Spectrum) []string {
-	head := fmt.Sprintf("%s  %d kbps", s.Status, s.ClaimedKbps)
-	if s.EstimatedKbps > 0 {
-		head += fmt.Sprintf(", like ~%d", s.EstimatedKbps)
-	}
-	expected := float64(s.ExpectedHz) / 1000
-	switch {
-	case s.Status == "UNKNOWN":
-		return []string{head, dialogHintStyle.Render("too little treble to judge by")}
-	case s.CutoffHz > 0:
-		head += fmt.Sprintf("  %.2f", s.Score)
-		return []string{head, fmt.Sprintf("stops at %.1f kHz, not %.1f", float64(s.CutoffHz)/1000, expected)}
-	case s.Status == "OK":
-		return []string{head, fmt.Sprintf("full band, up to %.1f kHz", expected)}
-	}
-	return []string{head + fmt.Sprintf("  %.2f", s.Score)}
 }
 
 // overlayTopRight draws box over base in the top right corner, below the
