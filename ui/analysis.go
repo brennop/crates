@@ -86,6 +86,9 @@ func (m *Library) analyzed(msg AnalyzeResult) {
 		keys := m.keyGuesses[msg.ID]
 		for _, k := range msg.Result.Keys {
 			keys = append(keys, k.Key)
+			if c, ok := model.ParseCamelot(k.Key); ok {
+				keys = append(keys, c.String()) // as the panel shows it
+			}
 		}
 		m.keyGuesses[msg.ID] = uniq(keys)
 	}
