@@ -337,6 +337,24 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "pause: " + msg.Err.Error()
 		}
 		return m, nil
+	case SeekResult:
+		if msg.Err != nil {
+			m.status = "seek: " + msg.Err.Error()
+		}
+		return m, nil
+
+	case tea.MouseClickMsg:
+		return m, m.seekClick(msg)
+	case tea.MouseWheelMsg:
+		// With the mouse on, the terminal sends the wheel here instead of
+		// as arrow keys; turn it back into them so it still moves the cursor.
+		switch msg.Button {
+		case tea.MouseWheelUp:
+			return m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+		case tea.MouseWheelDown:
+			return m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+		}
+		return m, nil
 
 	case spinner.TickMsg:
 		return m, m.spinTick(msg)
@@ -534,6 +552,7 @@ func (m *Library) View() tea.View {
 	}
 	v := tea.NewView(content)
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion // clicks on the playing line's bar seek
 	v.WindowTitle = "crates"
 	return v
 }
@@ -556,6 +575,13 @@ func (m *Library) statusLine() string {
 		const lead = "stopped · "
 		return statusStyle.Render(lead + hints(m.width-2-len(lead), libraryHints()...))
 	}
+	return playingLine(m.playingName(), p.Position, p.Duration, m.width)
+}
+
+// playingName is what the playing line shows before the times: the state
+// and the track.
+func (m *Library) playingName() string {
+	p := m.player
 	name := filepath.Base(p.Path)
 	for _, t := range m.tracks {
 		if t.ID == p.TrackID {
@@ -567,31 +593,77 @@ func (m *Library) statusLine() string {
 	if p.Paused {
 		state = "‖"
 	}
-	return playingLine(state+" "+name, p.Position, p.Duration, m.width)
+	return state + " " + name
+}
+
+// seekClick seeks to the spot on the playing line's bar that a left click
+// hit, and does nothing for a click anywhere else, or while the status line
+// shows something other than the playing track.
+func (m *Library) seekClick(msg tea.MouseClickMsg) tea.Cmd {
+	p := m.player
+	if msg.Button != tea.MouseLeft || p.Idle || p.TrackID == 0 ||
+		m.search != nil || m.edit != nil || m.token != nil || m.status != "" ||
+		m.dialog != nil || m.confirm != nil {
+		return nil
+	}
+	// The status line is the last line, under the title and the table.
+	if msg.Y != 1+lipgloss.Height(m.table.View()) {
+		return nil
+	}
+	l := layoutPlaying(m.playingName(), p.Position, p.Duration, m.width)
+	if l.barW == 0 || msg.X < l.barX || msg.X >= l.barX+l.barW {
+		return nil
+	}
+	frac := (float64(msg.X-l.barX) + 0.5) / float64(l.barW)
+	return Seek(m.ctx, m.app, time.Duration(frac*float64(p.Duration)), false)
 }
 
 // playingLine renders the status line for a track playing: what plays, then
-// the position, a bar and the length on the right. On a narrow screen, or
-// before the length is known, the bar gives way to "position / length".
-// The text is faint on each side of the bar, since the bar's colors end in
-// a reset.
+// the position, a bar and the length on the right. The bar takes all the
+// room the name leaves. On a narrow screen, or before the length is known,
+// the bar gives way to "position / length". The text is faint on each side
+// of the bar, since the bar's colors end in a reset.
 func playingLine(what string, pos, dur time.Duration, width int) string {
-	avail := max(width-2, 0) // padding
-	if dur <= 0 || avail < 50 {
+	l := layoutPlaying(what, pos, dur, width)
+	if l.barW == 0 {
 		line := fmt.Sprintf("%s  %s / %s", what, clock(pos), clock(dur))
 		return statusStyle.Width(width).MaxWidth(width).Render(line)
+	}
+	what = ansi.Truncate(what, l.nameW, "…")
+	gap := strings.Repeat(" ", max(l.nameW-lipgloss.Width(what), 0)+2)
+	faint := lipgloss.NewStyle().Faint(true)
+	line := faint.Render(what+gap+l.at+" ") + bar(l.barW, float64(pos)/float64(dur)) + faint.Render(" "+l.length)
+	return lipgloss.NewStyle().Padding(0, 1).Width(width).MaxWidth(width).Render(line)
+}
+
+// playLayout places the parts of the playing line: the name's width, and
+// the bar's first column and width (0 when there is no bar).
+type playLayout struct {
+	nameW, barX, barW int
+	at, length        string
+}
+
+// layoutPlaying sizes the playing line, for drawing it and for finding the
+// bar under a mouse click. The name keeps its own width up to two fifths of
+// the line; the bar fills the rest.
+func layoutPlaying(what string, pos, dur time.Duration, width int) playLayout {
+	avail := max(width-2, 0) // padding
+	if dur <= 0 || avail < 50 {
+		return playLayout{}
 	}
 	at, length := clock(pos), clock(dur)
 	if at == "" {
 		at = "0:00" // clock leaves zero blank
 	}
-	barW := min(30, avail/4)
-	nameW := avail - 2 - len(at) - 1 - barW - 1 - len(length)
-	what = ansi.Truncate(what, nameW, "…")
-	gap := strings.Repeat(" ", max(nameW-lipgloss.Width(what), 0)+2)
-	faint := lipgloss.NewStyle().Faint(true)
-	line := faint.Render(what+gap+at+" ") + bar(barW, float64(pos)/float64(dur)) + faint.Render(" "+length)
-	return lipgloss.NewStyle().Padding(0, 1).Width(width).MaxWidth(width).Render(line)
+	nameW := min(lipgloss.Width(what), avail*2/5)
+	barW := avail - nameW - 2 - len(at) - 1 - 1 - len(length)
+	return playLayout{
+		nameW:  nameW,
+		barX:   1 + nameW + 2 + len(at) + 1,
+		barW:   barW,
+		at:     at,
+		length: length,
+	}
 }
 
 // Column indexes.

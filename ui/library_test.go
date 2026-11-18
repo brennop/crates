@@ -302,13 +302,21 @@ func TestScanProgressSpins(t *testing.T) {
 func TestPlayingLine(t *testing.T) {
 	plain := func(s string) string { return ansi.Strip(s) }
 	wide := plain(playingLine("▶ Artist – Title", 0, 4*time.Minute, 100))
-	if lipgloss.Width(wide) != 100 || !strings.HasPrefix(wide, " ▶ Artist – Title") ||
-		!strings.HasSuffix(wide, "0:00 "+strings.Repeat("░", 24)+" 4:00 ") {
+	// The bar fills everything the name and the times leave:
+	// 100 - 2 padding - 16 name - 2 gap - "0:00 " - " 4:00" = 70.
+	if lipgloss.Width(wide) != 100 || !strings.HasPrefix(wide, " ▶ Artist – Title  0:00 ") ||
+		!strings.HasSuffix(wide, "0:00 "+strings.Repeat("░", 70)+" 4:00 ") {
 		t.Errorf("wide line = %q", wide)
 	}
 	half := plain(playingLine("▶ x", 2*time.Minute, 4*time.Minute, 100))
-	if !strings.Contains(half, "2:00 "+strings.Repeat("█", 12)+strings.Repeat("░", 12)+" 4:00") {
+	if lipgloss.Width(half) != 100 || !strings.Contains(half, "2:00 "+strings.Repeat("█", 42)+strings.Repeat("░", 41)+" 4:00") {
 		t.Errorf("half-way line = %q", half)
+	}
+	// The layout finds the bar where it is drawn.
+	l := layoutPlaying("▶ Artist – Title", 0, 4*time.Minute, 100)
+	if l.barW != 70 || []rune(wide)[l.barX] != '░' || []rune(wide)[l.barX-1] != ' ' ||
+		[]rune(wide)[l.barX+l.barW] != ' ' {
+		t.Errorf("layout = %+v for %q", l, wide)
 	}
 	// Narrow, or the length not known yet: no bar.
 	for _, line := range []string{
@@ -323,5 +331,42 @@ func TestPlayingLine(t *testing.T) {
 	long := plain(playingLine("▶ "+strings.Repeat("Name ", 40), time.Minute, 4*time.Minute, 80))
 	if lipgloss.Width(long) != 80 || !strings.Contains(long, "…") || !strings.HasSuffix(long, " 4:00 ") {
 		t.Errorf("long line = %q", long)
+	}
+}
+
+func TestClickOnBarSeeks(t *testing.T) {
+	e := newEnv(t)
+	m := New(e.ctx, e.app, e.bus).(*Library)
+	feed(t, m, tea.WindowSizeMsg{Width: 120, Height: 20})
+	m.player = events.PlayerState{TrackID: 1, Path: "/x/a.mp3", Position: time.Minute, Duration: 4 * time.Minute}
+
+	// Find the playing line on screen, as drawn.
+	lines := strings.Split(ansi.Strip(m.View().Content), "\n")
+	y := -1
+	for i, line := range lines {
+		if strings.Contains(line, "a.mp3") {
+			y = i
+		}
+	}
+	l := layoutPlaying(m.playingName(), m.player.Position, m.player.Duration, m.width)
+	if y < 0 || l.barW == 0 {
+		t.Fatalf("no playing line with a bar: %q", lines)
+	}
+	click := func(x, y int) tea.Cmd {
+		return m.seekClick(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	}
+	for _, x := range []int{l.barX, l.barX + l.barW/2, l.barX + l.barW - 1} {
+		if click(x, y) == nil {
+			t.Errorf("click on the bar at x=%d did not seek", x)
+		}
+	}
+	for _, at := range [][2]int{{l.barX - 1, y}, {l.barX + l.barW, y}, {l.barX, y - 1}} {
+		if click(at[0], at[1]) != nil {
+			t.Errorf("click at %v, off the bar, seeks", at)
+		}
+	}
+	m.dialog = &playlistDialog{}
+	if click(l.barX, y) != nil {
+		t.Error("click under an open dialog seeks")
 	}
 }
