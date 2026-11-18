@@ -16,10 +16,11 @@ type editField struct {
 }
 
 var (
-	editTitle   = editField{"title", "Title"}
-	editArtist  = editField{"artist", "Artist"}
-	editGenre   = editField{"genre", "Genre"}
-	editComment = editField{"comment", "Comment"}
+	editTitle      = editField{"title", "Title"}
+	editArtist     = editField{"artist", "Artist"}
+	editGenre      = editField{"genre", "Genre"}
+	editComment    = editField{"comment", "Comment"}
+	editInitialKey = editField{"key", "Initial Key"}
 )
 
 // editPrompt is an open tag edit in the status line. It holds the track's
@@ -56,6 +57,8 @@ func (m *Library) openEdit(f editField) {
 		v = s.Genre
 	case editComment:
 		v = oneLine(s.Comment)
+	case editInitialKey:
+		v = s.Key
 	}
 	in := newPromptInput(f.label+": ", v, m.width)
 	m.edit = &editPrompt{id: t.ID, field: f, input: in, orig: v}

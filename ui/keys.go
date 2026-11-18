@@ -17,14 +17,14 @@ func newBinding(help, desc string, keys ...string) binding.Binding {
 // libraryKeys are the Library's keys outside the prompts and dialogs.
 var libraryKeys = struct {
 	ForceQuit, Quit, Pause, Search, Next, Prev, Sort binding.Binding
-	EditTitle, EditArtist, EditComment               binding.Binding
+	EditTitle, EditArtist, EditComment, EditKey      binding.Binding
 	Playlists, Delete, DeleteNow, Analyze            binding.Binding
 
 	// z and g are prefixes: zz centers, gg goes to the top, ge edits the
 	// genre. A lone g must not go to the top (see New).
 	Center, G, Top, EditGenre binding.Binding
 
-	// Edit is the hint for the four edit keys.
+	// Edit is the hint for the five edit keys.
 	Edit binding.Binding
 }{
 	ForceQuit: newBinding("ctrl+c", "quit", "ctrl+c"),
@@ -38,6 +38,7 @@ var libraryKeys = struct {
 	EditTitle:   newBinding("t", "edit title", "t"),
 	EditArtist:  newBinding("a", "edit artist", "a"),
 	EditComment: newBinding("c", "edit comment", "c"),
+	EditKey:     newBinding("e", "edit key", "e"),
 
 	Playlists: newBinding("p", "playlists", "p"),
 	Delete:    newBinding("x", "delete", "x"),
@@ -49,7 +50,7 @@ var libraryKeys = struct {
 	Top:       newBinding("gg", "top", "g"),
 	EditGenre: newBinding("ge", "edit genre", "e"),
 
-	Edit: newBinding("c/a/t/ge", "edit", "c", "a", "t"),
+	Edit: newBinding("c/a/t/e/ge", "edit", "c", "a", "t", "e"),
 }
 
 // libraryHints are the keys the idle status line lists.

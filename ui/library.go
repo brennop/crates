@@ -229,6 +229,9 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case binding.Matches(msg, k.EditComment):
 			m.openEdit(editComment)
 			return m, nil
+		case binding.Matches(msg, k.EditKey):
+			m.openEdit(editInitialKey)
+			return m, nil
 		case binding.Matches(msg, k.Quit):
 			return m, tea.Quit
 		case binding.Matches(msg, k.Playlists):

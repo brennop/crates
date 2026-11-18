@@ -223,3 +223,24 @@ func TestEditCommentShowsTags(t *testing.T) {
 		t.Fatalf("no file, no default: edit %+v", m.edit)
 	}
 }
+
+func TestEditInitialKey(t *testing.T) {
+	e, m := searchLibrary(t)
+	feed(t, m, key("j"))
+	feed(t, m, key("j"))
+	feed(t, m, key("j")) // Delta, in Am
+
+	feed(t, m, key("e"))
+	if m.edit == nil || m.edit.field != editInitialKey || m.edit.input.Value() != "Am" {
+		t.Fatalf("e: edit %+v", m.edit)
+	}
+	if !strings.Contains(m.View().Content, "key: Am") {
+		t.Error("status line lacks the prompt")
+	}
+	feed(t, m, ctrlU)
+	typeText(t, m, "8A")
+	feed(t, m, enterKey)
+	if w := lastWrite(t, e); w.Changes[0] != (model.FrameChange{Name: "Initial Key", Value: "8A"}) {
+		t.Fatalf("changes %+v", w.Changes)
+	}
+}
