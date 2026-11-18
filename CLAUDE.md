@@ -17,6 +17,7 @@ The UI is Bubble Tea v2 with bubbles v2 and lipgloss v2 (`charm.land/...`). Befo
 | Key hints and help | `bubbles/help`, through `hints` in `ui/keys.go` |
 | Loading or progress | `bubbles/spinner`, `bubbles/progress` |
 | A box over the table | `dialogBox` and `overlay` in `ui/dialog.go` |
+| Mouse clicks | `bubblezone` zones: `zones.Mark` in `View`, `zones.Get(id).Pos` in `Update` (see `rowClick` in `ui/library.go`) |
 | Truncating, measuring, layout | lipgloss (`Width`, `JoinVertical`, `Compositor`) and `ansi.Truncate` |
 
 Read the component's source in the module cache (`go env GOMODCACHE`) to see what it can do; check its options before deciding it can't.

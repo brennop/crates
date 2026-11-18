@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/brennop/crates/app"
 	"github.com/brennop/crates/config"
@@ -65,6 +66,8 @@ type Library struct {
 	scan     events.ScanProgress // the latest scan report
 	spinner  spinner.Model       // shown while busy; see busy.go
 	spinning bool                // a spinner tick is pending
+
+	zones *zone.Manager // where the table and the bar are on screen, for clicks
 
 	width, height int
 	cols          []table.Column // current widths, so row can fill its cells
@@ -121,12 +124,20 @@ func New(ctx context.Context, a *app.App, bus *events.Bus) tea.Model {
 	// g is a prefix (gg, ge), so a lone g must not go to the top.
 	t.KeyMap.GotoTop = binding.NewBinding(binding.WithKeys("home"))
 	tagsPath, _ := config.TagsPath() // "" leaves the panel off
+	zones := zone.New()
+	context.AfterFunc(ctx, zones.Close)
 	return &Library{
 		ctx: ctx, app: a, bus: bus, table: t, cols: cols, sortBy: defaultSort,
 		deleteMode: a.Capabilities().DeleteMode, tagsPath: tagsPath,
-		spinner: newSpinner(),
+		spinner: newSpinner(), zones: zones,
 	}
 }
+
+// Zone IDs for clicks.
+const (
+	zoneTable = "table"
+	zoneBar   = "bar"
+)
 
 func (m *Library) Init() tea.Cmd {
 	return tea.Batch(WaitForEvent(m.bus), m.load())
@@ -344,6 +355,12 @@ func (m *Library) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseClickMsg:
+		if msg.Button != tea.MouseLeft || m.mouseBlocked() {
+			return m, nil
+		}
+		if cmd, ok := m.rowClick(msg); ok {
+			return m, cmd
+		}
 		return m, m.seekClick(msg)
 	case tea.MouseWheelMsg:
 		// With the mouse on, the terminal sends the wheel here instead of
@@ -537,7 +554,10 @@ func (m *Library) View() tea.View {
 	}
 	title += statusStyle.Render("sorted by " + sortOrders[m.sortBy].name + " · s to change")
 	title = ansi.Truncate(title, m.width, "…")
-	content := lipgloss.JoinVertical(lipgloss.Left, title, m.table.View(), m.statusLine())
+	content := lipgloss.JoinVertical(lipgloss.Left, title, m.zones.Mark(zoneTable, m.table.View()), m.statusLine())
+	// Before the overlays: the compositor that draws them drops the zone
+	// markers. Clicks are ignored while a box covers the screen (mouseBlocked).
+	content = m.zones.Scan(content)
 	if m.edit != nil && strings.TrimSpace(m.edit.vocab) != "" {
 		content = overlayBottom(content, m.edit.tagsPanel(m.width), m.height)
 	}
@@ -575,7 +595,7 @@ func (m *Library) statusLine() string {
 		const lead = "stopped · "
 		return statusStyle.Render(lead + hints(m.width-2-len(lead), libraryHints()...))
 	}
-	return playingLine(m.playingName(), p.Position, p.Duration, m.width)
+	return playingLine(m.playingName(), p.Position, p.Duration, m.width, m.zones)
 }
 
 // playingName is what the playing line shows before the times: the state
@@ -596,26 +616,40 @@ func (m *Library) playingName() string {
 	return state + " " + name
 }
 
-// seekClick seeks to the spot on the playing line's bar that a left click
-// hit, and does nothing for a click anywhere else, or while the status line
-// shows something other than the playing track.
+// mouseBlocked reports whether clicks are ignored: while a prompt has the
+// status line, or a dialog covers the table.
+func (m *Library) mouseBlocked() bool {
+	return m.search != nil || m.edit != nil || m.token != nil ||
+		m.dialog != nil || m.confirm != nil
+}
+
+// rowClick selects the row a click hit, which then plays like a row reached
+// with the keys. ok is false for a click outside the rows.
+func (m *Library) rowClick(msg tea.MouseClickMsg) (cmd tea.Cmd, ok bool) {
+	z := m.zones.Get(zoneTable)
+	_, y := z.Pos(msg)
+	if y < 0 {
+		return nil, false
+	}
+	header := z.EndY - z.StartY + 1 - m.table.Height() // the header and its border
+	row := m.top + y - header
+	if y < header || row >= len(m.tracks) {
+		return nil, true // the header, or blank space under the last row
+	}
+	m.setCursor(row)
+	return m.selectionMoved(), true
+}
+
+// seekClick seeks to the spot on the playing line's bar that a click hit,
+// and does nothing for a click anywhere else.
 func (m *Library) seekClick(msg tea.MouseClickMsg) tea.Cmd {
-	p := m.player
-	if msg.Button != tea.MouseLeft || p.Idle || p.TrackID == 0 ||
-		m.search != nil || m.edit != nil || m.token != nil || m.status != "" ||
-		m.dialog != nil || m.confirm != nil {
+	z := m.zones.Get(zoneBar)
+	x, _ := z.Pos(msg)
+	if x < 0 || m.player.Duration <= 0 {
 		return nil
 	}
-	// The status line is the last line, under the title and the table.
-	if msg.Y != 1+lipgloss.Height(m.table.View()) {
-		return nil
-	}
-	l := layoutPlaying(m.playingName(), p.Position, p.Duration, m.width)
-	if l.barW == 0 || msg.X < l.barX || msg.X >= l.barX+l.barW {
-		return nil
-	}
-	frac := (float64(msg.X-l.barX) + 0.5) / float64(l.barW)
-	return Seek(m.ctx, m.app, time.Duration(frac*float64(p.Duration)), false)
+	frac := (float64(x) + 0.5) / float64(z.EndX-z.StartX+1)
+	return Seek(m.ctx, m.app, time.Duration(frac*float64(m.player.Duration)), false)
 }
 
 // playingLine renders the status line for a track playing: what plays, then
@@ -623,7 +657,8 @@ func (m *Library) seekClick(msg tea.MouseClickMsg) tea.Cmd {
 // room the name leaves. On a narrow screen, or before the length is known,
 // the bar gives way to "position / length". The text is faint on each side
 // of the bar, since the bar's colors end in a reset.
-func playingLine(what string, pos, dur time.Duration, width int) string {
+// zones, when not nil, marks the bar for clicks.
+func playingLine(what string, pos, dur time.Duration, width int, zones *zone.Manager) string {
 	l := layoutPlaying(what, pos, dur, width)
 	if l.barW == 0 {
 		line := fmt.Sprintf("%s  %s / %s", what, clock(pos), clock(dur))
@@ -632,20 +667,23 @@ func playingLine(what string, pos, dur time.Duration, width int) string {
 	what = ansi.Truncate(what, l.nameW, "…")
 	gap := strings.Repeat(" ", max(l.nameW-lipgloss.Width(what), 0)+2)
 	faint := lipgloss.NewStyle().Faint(true)
-	line := faint.Render(what+gap+l.at+" ") + bar(l.barW, float64(pos)/float64(dur)) + faint.Render(" "+l.length)
+	b := bar(l.barW, float64(pos)/float64(dur))
+	if zones != nil {
+		b = zones.Mark(zoneBar, b)
+	}
+	line := faint.Render(what+gap+l.at+" ") + b + faint.Render(" "+l.length)
 	return lipgloss.NewStyle().Padding(0, 1).Width(width).MaxWidth(width).Render(line)
 }
 
-// playLayout places the parts of the playing line: the name's width, and
-// the bar's first column and width (0 when there is no bar).
+// playLayout sizes the parts of the playing line: the name and the bar
+// (0 when there is no bar).
 type playLayout struct {
-	nameW, barX, barW int
-	at, length        string
+	nameW, barW int
+	at, length  string
 }
 
-// layoutPlaying sizes the playing line, for drawing it and for finding the
-// bar under a mouse click. The name keeps its own width up to two fifths of
-// the line; the bar fills the rest.
+// layoutPlaying sizes the playing line. The name keeps its own width up to
+// two fifths of the line; the bar fills the rest.
 func layoutPlaying(what string, pos, dur time.Duration, width int) playLayout {
 	avail := max(width-2, 0) // padding
 	if dur <= 0 || avail < 50 {
@@ -659,7 +697,6 @@ func layoutPlaying(what string, pos, dur time.Duration, width int) playLayout {
 	barW := avail - nameW - 2 - len(at) - 1 - 1 - len(length)
 	return playLayout{
 		nameW:  nameW,
-		barX:   1 + nameW + 2 + len(at) + 1,
 		barW:   barW,
 		at:     at,
 		length: length,

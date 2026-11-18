@@ -15,6 +15,7 @@ import (
 
 	"github.com/brennop/crates/events"
 	"github.com/brennop/crates/model"
+	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 // exec runs cmd and every command it batches or sequences, in order, and
@@ -301,37 +302,46 @@ func TestScanProgressSpins(t *testing.T) {
 
 func TestPlayingLine(t *testing.T) {
 	plain := func(s string) string { return ansi.Strip(s) }
-	wide := plain(playingLine("▶ Artist – Title", 0, 4*time.Minute, 100))
+	wide := plain(playingLine("▶ Artist – Title", 0, 4*time.Minute, 100, nil))
 	// The bar fills everything the name and the times leave:
 	// 100 - 2 padding - 16 name - 2 gap - "0:00 " - " 4:00" = 70.
 	if lipgloss.Width(wide) != 100 || !strings.HasPrefix(wide, " ▶ Artist – Title  0:00 ") ||
 		!strings.HasSuffix(wide, "0:00 "+strings.Repeat("░", 70)+" 4:00 ") {
 		t.Errorf("wide line = %q", wide)
 	}
-	half := plain(playingLine("▶ x", 2*time.Minute, 4*time.Minute, 100))
+	half := plain(playingLine("▶ x", 2*time.Minute, 4*time.Minute, 100, nil))
 	if lipgloss.Width(half) != 100 || !strings.Contains(half, "2:00 "+strings.Repeat("█", 42)+strings.Repeat("░", 41)+" 4:00") {
 		t.Errorf("half-way line = %q", half)
 	}
-	// The layout finds the bar where it is drawn.
-	l := layoutPlaying("▶ Artist – Title", 0, 4*time.Minute, 100)
-	if l.barW != 70 || []rune(wide)[l.barX] != '░' || []rune(wide)[l.barX-1] != ' ' ||
-		[]rune(wide)[l.barX+l.barW] != ' ' {
-		t.Errorf("layout = %+v for %q", l, wide)
-	}
 	// Narrow, or the length not known yet: no bar.
 	for _, line := range []string{
-		plain(playingLine("▶ x", time.Minute, 4*time.Minute, 40)),
-		plain(playingLine("▶ x", time.Minute, 0, 100)),
+		plain(playingLine("▶ x", time.Minute, 4*time.Minute, 40, nil)),
+		plain(playingLine("▶ x", time.Minute, 0, 100, nil)),
 	} {
 		if strings.ContainsAny(line, "█░") || !strings.Contains(line, "1:00 / ") {
 			t.Errorf("line = %q, want no bar", line)
 		}
 	}
 	// A long name is cut, never the bar or the times.
-	long := plain(playingLine("▶ "+strings.Repeat("Name ", 40), time.Minute, 4*time.Minute, 80))
+	long := plain(playingLine("▶ "+strings.Repeat("Name ", 40), time.Minute, 4*time.Minute, 80, nil))
 	if lipgloss.Width(long) != 80 || !strings.Contains(long, "…") || !strings.HasSuffix(long, " 4:00 ") {
 		t.Errorf("long line = %q", long)
 	}
+}
+
+// waitZone renders m and waits for bubblezone, which records zones on its
+// own goroutine, to know where id is.
+func waitZone(t *testing.T, m *Library, id string) *zone.ZoneInfo {
+	t.Helper()
+	m.View()
+	for range 100 {
+		if z := m.zones.Get(id); !z.IsZero() {
+			return z
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("zone %q never recorded", id)
+	return nil
 }
 
 func TestClickOnBarSeeks(t *testing.T) {
@@ -340,33 +350,65 @@ func TestClickOnBarSeeks(t *testing.T) {
 	feed(t, m, tea.WindowSizeMsg{Width: 120, Height: 20})
 	m.player = events.PlayerState{TrackID: 1, Path: "/x/a.mp3", Position: time.Minute, Duration: 4 * time.Minute}
 
-	// Find the playing line on screen, as drawn.
+	// The zone is where the bar is drawn.
+	z := waitZone(t, m, zoneBar)
 	lines := strings.Split(ansi.Strip(m.View().Content), "\n")
-	y := -1
-	for i, line := range lines {
-		if strings.Contains(line, "a.mp3") {
-			y = i
+	if z.StartY != z.EndY || z.StartY != len(lines)-1 {
+		t.Fatalf("bar zone %+v, want on the last of %d lines", z, len(lines))
+	}
+	line := []rune(lines[z.StartY])
+	if line[z.StartX-1] != ' ' || line[z.StartX] != '█' || line[z.EndX] != '░' || line[z.EndX+1] != ' ' {
+		t.Fatalf("bar zone %+v on %q", z, lines[z.StartY])
+	}
+
+	click := func(x, y int) tea.Msg {
+		_, cmd := m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+		if cmd == nil {
+			return nil
 		}
+		return cmd()
 	}
-	l := layoutPlaying(m.playingName(), m.player.Position, m.player.Duration, m.width)
-	if y < 0 || l.barW == 0 {
-		t.Fatalf("no playing line with a bar: %q", lines)
+	if _, ok := click(z.StartX, z.StartY).(SeekResult); !ok {
+		t.Error("click on the bar did not seek")
 	}
-	click := func(x, y int) tea.Cmd {
-		return m.seekClick(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
-	}
-	for _, x := range []int{l.barX, l.barX + l.barW/2, l.barX + l.barW - 1} {
-		if click(x, y) == nil {
-			t.Errorf("click on the bar at x=%d did not seek", x)
-		}
-	}
-	for _, at := range [][2]int{{l.barX - 1, y}, {l.barX + l.barW, y}, {l.barX, y - 1}} {
-		if click(at[0], at[1]) != nil {
-			t.Errorf("click at %v, off the bar, seeks", at)
+	for _, at := range [][2]int{{z.StartX - 1, z.StartY}, {z.EndX + 1, z.StartY}} {
+		if msg := click(at[0], at[1]); msg != nil {
+			t.Errorf("click at %v, off the bar, gave %T", at, msg)
 		}
 	}
 	m.dialog = &playlistDialog{}
-	if click(l.barX, y) != nil {
-		t.Error("click under an open dialog seeks")
+	if msg := click(z.StartX, z.StartY); msg != nil {
+		t.Errorf("click under an open dialog gave %T", msg)
+	}
+}
+
+func TestClickOnRowSelectsIt(t *testing.T) {
+	e := newEnv(t)
+	for _, name := range []string{"a.mp3", "b.mp3", "c.mp3"} {
+		e.file(e.master, name)
+	}
+	m := New(e.ctx, e.app, e.bus).(*Library)
+	feed(t, m, tea.WindowSizeMsg{Width: 120, Height: 20})
+	loaded, ok := find[libraryLoaded](exec(m.load()))
+	if !ok {
+		t.Fatal("load returned no libraryLoaded")
+	}
+	feed(t, m, loaded)
+
+	z := waitZone(t, m, zoneTable)
+	header := z.EndY - z.StartY + 1 - m.table.Height()
+	click := func(y int) []tea.Msg {
+		return feed(t, m, tea.MouseClickMsg{X: 5, Y: y, Button: tea.MouseLeft})
+	}
+	tick, ok := find[playTick](click(z.StartY + header + 2))
+	if m.cursor != 2 || !ok || tick.id != m.selected() {
+		t.Fatalf("click on the third row: cursor %d, tick %+v", m.cursor, tick)
+	}
+	// The header and the space under the last row select nothing.
+	for _, y := range []int{z.StartY, z.StartY + header + 3} {
+		click(y)
+		if m.cursor != 2 {
+			t.Errorf("click at y=%d moved the cursor to %d", y, m.cursor)
+		}
 	}
 }

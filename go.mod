@@ -1,17 +1,18 @@
 module github.com/brennop/crates
 
-go 1.25.8
+go 1.26.0
 
 require (
 	charm.land/bubbles/v2 v2.0.0
-	charm.land/bubbletea/v2 v2.0.2
+	charm.land/bubbletea/v2 v2.1.1
 	charm.land/glamour/v2 v2.0.1
 	charm.land/lipgloss/v2 v2.0.4
 	codeberg.org/derat/mpeg v0.0.0-20260508234456-e65f288d7f2e
 	github.com/BurntSushi/toml v1.4.0
-	github.com/charmbracelet/x/ansi v0.11.7
+	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
-	github.com/lucasb-eyer/go-colorful v1.4.0
+	github.com/lrstanley/bubblezone/v2 v2.0.1
+	github.com/lucasb-eyer/go-colorful v1.4.1
 	golang.org/x/text v0.24.0
 	modernc.org/sqlite v1.44.3
 )
@@ -22,7 +23,7 @@ require (
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/harmonica v0.2.0 // indirect
-	github.com/charmbracelet/ultraviolet v0.0.0-20260205113103-524a6607adb8 // indirect
+	github.com/charmbracelet/ultraviolet v0.0.0-20261023060817-a45b7c86333f // indirect
 	github.com/charmbracelet/x/exp/slice v0.0.0-20250327172914-2fdc97757edf // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
@@ -35,20 +36,20 @@ require (
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/hjfreyer/taglib-go v0.0.0-20250508221915-cb3b18d1ad7b // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-runewidth v0.0.23 // indirect
+	github.com/mattn/go-runewidth v0.0.31 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sahilm/fuzzy v0.1.1 // indirect
-	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
+	github.com/xo/terminfo v1.3.1 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
 	github.com/yuin/goldmark-emoji v1.0.5 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/net v0.39.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
