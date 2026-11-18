@@ -24,9 +24,6 @@ var libraryKeys = struct {
 	// z and g are prefixes: zz centers, gg goes to the top, ge edits the
 	// genre. A lone g must not go to the top (see New).
 	Center, G, Top, EditGenre binding.Binding
-
-	// Edit is the hint for the five edit keys.
-	Edit binding.Binding
 }{
 	ForceQuit: newBinding("ctrl+c", "quit", "ctrl+c"),
 	Quit:      newBinding("q", "quit", "q"),
@@ -52,18 +49,6 @@ var libraryKeys = struct {
 	G:         newBinding("g", "prefix", "g"),
 	Top:       newBinding("gg", "top", "g"),
 	EditGenre: newBinding("ge", "edit genre", "e"),
-
-	Edit: newBinding("c/a/t/e/ge", "edit", "c", "a", "t", "e"),
-}
-
-// libraryHints are the keys the idle status line lists, with promote in
-// the inbox view.
-func libraryHints(inbox bool) []binding.Binding {
-	k := libraryKeys
-	if inbox {
-		return []binding.Binding{k.Pause, k.Search, k.Edit, k.Sort, k.Inbox, k.Promote, k.Playlists, k.Analyze, k.Delete, k.Quit}
-	}
-	return []binding.Binding{k.Pause, k.Search, k.Edit, k.Sort, k.Inbox, k.Playlists, k.Analyze, k.Delete, k.Quit}
 }
 
 // promptKeys end the / search and tag edit prompts; the textinput handles

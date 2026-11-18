@@ -361,3 +361,31 @@ func TestDeleteMissingFileStillRemoves(t *testing.T) {
 		t.Fatalf("summary = %+v", sum)
 	}
 }
+
+func TestCheckPromote(t *testing.T) {
+	e := newEnv(t)
+	all := model.TagSummary{Title: "T", Artist: "A"}
+	ok := e.file(e.inbox, "ok.mp3", all)
+	bare := e.file(e.inbox, "bare.mp3", model.TagSummary{Title: "T"})
+	m := e.file(e.master, "taken.mp3", all)
+	clash := e.file(e.inbox, "taken.mp3", all)
+
+	if err := e.app.CheckPromote(ok.ID); err != nil {
+		t.Errorf("ok: %v", err)
+	}
+	var mt model.ErrMissingTags
+	if err := e.app.CheckPromote(bare.ID); !errors.As(err, &mt) {
+		t.Errorf("bare: %v, want ErrMissingTags", err)
+	}
+	var c model.ErrCollision
+	if err := e.app.CheckPromote(clash.ID); !errors.As(err, &c) || c.Existing != m.ID {
+		t.Errorf("clash: %v, want ErrCollision with %d", err, m.ID)
+	}
+	var ni model.ErrNotInbox
+	if err := e.app.CheckPromote(m.ID); !errors.As(err, &ni) {
+		t.Errorf("master: %v, want ErrNotInbox", err)
+	}
+	if !exists(ok.Path) || !exists(clash.Path) {
+		t.Error("CheckPromote moved a file")
+	}
+}

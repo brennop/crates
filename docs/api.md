@@ -83,6 +83,8 @@ Change events come before state events when both are waiting.
 | `Overwrite(ctx, a, inboxID)` | `OverwriteResult{Inbox, Err}` | `ErrBackupKept` (done, old file kept), `ErrMissingTags`, `ErrNotInbox`, `ErrUnknownTrack`, file errors | `TracksChanged`, `TrackRemoved` (the inbox track); `Error` if Music's refresh fails |
 | `Delete(ctx, a, ids)` | `DeleteResult{Summary}` | in `Summary.Failures`: `ErrPlaylistsLost`, Music errors, file errors, `ErrUnknownTrack` | `TrackRemoved`; `PlaylistsChanged` for tracks that were in Music |
 
+`a.CheckPromote(id)` is a plain call, not a command: it returns the error `Promote` would give for that track right now (`ErrMissingTags`, `ErrNotInbox`, `ErrUnknownTrack`, or `ErrCollision` for a name taken in master) without changing anything. Use it to refuse early; `Promote` still checks again.
+
 `PromoteSummary` holds `Promoted`, `Collisions` (`{Inbox, Existing, Name}`) and `Failures` (`{ID, Err}`). `DeleteSummary` holds `Deleted` and `Failures`. One track failing never stops the rest.
 
 ### Tags

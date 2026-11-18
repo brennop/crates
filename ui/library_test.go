@@ -240,9 +240,6 @@ func TestLibraryPromote(t *testing.T) {
 	if len(m.tracks) != 1 || filepath.Base(m.tracks[0].Path) != "taken.mp3" {
 		t.Fatalf("inbox after promotes = %+v, want only the collision left", m.tracks)
 	}
-	if !strings.Contains(hints(0, libraryHints(true)...), "P promote") {
-		t.Error("inbox hints lack P promote")
-	}
 }
 
 // reload loads the library and feeds the result to m.

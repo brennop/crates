@@ -457,7 +457,13 @@ func (m *Library) openDialog() tea.Cmd {
 		return nil
 	}
 	t := m.tracks[i]
-	if t.MusicID == "" && t.Role != model.Inbox {
+	if t.Role == model.Inbox {
+		// Refuse now rather than after the playlists are picked.
+		if err := m.app.CheckPromote(t.ID); err != nil {
+			m.status = "promote: " + err.Error()
+			return nil
+		}
+	} else if t.MusicID == "" {
 		m.status = "playlists: track is not in Music yet"
 		return nil
 	}
@@ -692,8 +698,7 @@ func (m *Library) statusLine() string {
 	}
 	p := m.player
 	if p.Idle || p.TrackID == 0 {
-		const lead = "stopped · "
-		return statusStyle.Render(lead + hints(m.width-2-len(lead), libraryHints(m.inbox)...))
+		return statusStyle.Render("stopped")
 	}
 	return playingLine(m.playingName(), p.Position, p.Duration, m.width, m.zones)
 }

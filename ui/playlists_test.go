@@ -271,3 +271,18 @@ func find2[T any](t *testing.T, msgs []tea.Msg) T {
 	}
 	return v
 }
+
+func TestPlaylistDialogRefusesUnpromotable(t *testing.T) {
+	e := newEnv(t)
+	e.file(e.master, "taken.mp3")
+	e.file(e.inbox, "taken.mp3")
+	m := libraryWith(t, e)
+	feed(t, m, key("i"))
+	reload(t, m)
+	if msgs := feed(t, m, key("p")); len(msgs) != 0 || m.dialog != nil {
+		t.Fatalf("p on a collision opened the dialog: %v", msgs)
+	}
+	if !strings.Contains(m.status, "already exists in master") {
+		t.Errorf("status = %q", m.status)
+	}
+}

@@ -82,6 +82,22 @@ func (a *App) promote(id model.TrackID) error {
 	return err
 }
 
+// CheckPromote reports whether id would promote now: the error Promote
+// would give for missing tags, a master track or a name taken in master
+// (ErrCollision). It changes nothing, and Promote checks again, since
+// master may change in between.
+func (a *App) CheckPromote(id model.TrackID) error {
+	t, err := a.promotable(id)
+	if err != nil {
+		return err
+	}
+	name := filepath.Base(t.Path)
+	if m, ok := a.lib.FindMaster(name); ok {
+		return model.ErrCollision{Name: name, Existing: m.ID}
+	}
+	return nil
+}
+
 // promotable returns track id if it is an inbox track with every required
 // tag.
 func (a *App) promotable(id model.TrackID) (model.Track, error) {
